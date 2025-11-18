@@ -100,6 +100,7 @@ class AhrefsClient:
         date_str = today.strftime("%Y-%m-%d")
         
         # Base parameters for metrics endpoint
+        # Note: country parameter is NOT supported for metrics endpoint (causes HTTP 400)
         metrics_params: Dict[str, Any] = {
             "target": target,
             "date": date_str,
@@ -114,6 +115,7 @@ class AhrefsClient:
             "date": date_str,
             "protocol": "both"
         }
+        # Note: country parameter may not be supported for domain-rating either
         
         # Base parameters for backlinks-stats endpoint
         backlinks_params: Dict[str, Any] = {
@@ -122,10 +124,7 @@ class AhrefsClient:
             "mode": "subdomains",
             "protocol": "both"
         }
-        
-        # Add country if provided (if supported by endpoints)
-        if country:
-            metrics_params["country"] = country
+        # Note: country parameter may not be supported for backlinks-stats either
         
         metrics = {}
         errors = []
@@ -137,16 +136,27 @@ class AhrefsClient:
             metrics["_raw_dr_response"] = dr_response
             
             if isinstance(dr_response, dict):
-                # Extract DR value - try different possible keys
-                dr_value = (
-                    dr_response.get("domain_rating")
-                    or dr_response.get("dr")
-                    or dr_response.get("value")
-                    or (dr_response.get("data", {}).get("domain_rating") if isinstance(dr_response.get("data"), dict) else None)
-                    or (dr_response.get("data", {}).get("dr") if isinstance(dr_response.get("data"), dict) else None)
-                    or 0
-                )
-                metrics["domain_rating"] = int(dr_value) if dr_value else 0
+                # Handle nested structure: {"domain_rating": {"domain_rating": 78, ...}}
+                if "domain_rating" in dr_response and isinstance(dr_response["domain_rating"], dict):
+                    # Nested structure - extract from inner dict
+                    inner = dr_response["domain_rating"]
+                    dr_value = (
+                        inner.get("domain_rating")
+                        or inner.get("dr")
+                        or inner.get("value")
+                        or 0
+                    )
+                else:
+                    # Flat structure - try different possible keys
+                    dr_value = (
+                        dr_response.get("domain_rating")
+                        or dr_response.get("dr")
+                        or dr_response.get("value")
+                        or (dr_response.get("data", {}).get("domain_rating") if isinstance(dr_response.get("data"), dict) else None)
+                        or (dr_response.get("data", {}).get("dr") if isinstance(dr_response.get("data"), dict) else None)
+                        or 0
+                    )
+                metrics["domain_rating"] = int(dr_value) if dr_value and not isinstance(dr_value, dict) else 0
             elif isinstance(dr_response, (int, float)):
                 metrics["domain_rating"] = int(dr_response)
             else:

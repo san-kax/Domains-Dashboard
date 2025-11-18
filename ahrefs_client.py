@@ -1,114 +1,65 @@
 # ahrefs_client.py
-
 import os
-from datetime import date
-from typing import Dict, Any, List
+from typing import Any, Dict, Optional
 
 import requests
-from dotenv import load_dotenv
 
-load_dotenv()
-
-A_HREFS_API_TOKEN = os.getenv("A_HREFS_API_TOKEN")
-BASE_URL = "https://api.ahrefs.com/v3"  # v3 base URL for Enterprise
+from config import AHREFS_API_BASE_URL, AHREFS_API_TOKEN, API_TIMEOUT
 
 
 class AhrefsClient:
     """
-    Thin wrapper around Ahrefs API v3.
-    Adjust endpoints/params to match your account setup.
+    Very small wrapper around the Ahrefs v3 API.
+
+    Right now we only use Site Explorer > Overview to get:
+    - organic_traffic
+    - organic_keywords
+    - paid_traffic
+    - paid_keywords
+    - referring domains
+    - DR (authority)
     """
 
-    def __init__(self, token: str = None):
-        self.token = token or A_HREFS_API_TOKEN
-        if not self.token:
-            raise ValueError(
-                "A_HREFS_API_TOKEN not set. Set it in environment or .env or Streamlit secrets."
+    def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None) -> None:
+        self.api_key = api_key or AHREFS_API_TOKEN
+        self.base_url = (base_url or AHREFS_API_BASE_URL).rstrip("/")
+
+        if not self.api_key:
+            raise RuntimeError(
+                "Ahrefs API key is not configured. "
+                "Set A_HREFS_API_TOKEN in your environment or .env file."
             )
 
+    # ------------------------------------------------------------------ #
+    # internals
+    # ------------------------------------------------------------------ #
     def _headers(self) -> Dict[str, str]:
-        return {
-            "Authorization": f"Bearer {self.token}",
-            "Content-Type": "application/json",
-        }
+        # v3 uses Bearer token in Authorization header
+        return {"Authorization": f"Bearer {self.api_key}"}
 
-    # ----------- POSITIONS (organic/paid) ----------- #
+    def _get(self, path: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        url = f"{self.base_url}/{path.lstrip('/')}"
+        resp = requests.get(url, headers=self._headers(), params=params, timeout=API_TIMEOUT)
+        resp.raise_for_status()
+        return resp.json()
 
-    def positions_overview(
-        self,
-        domain: str,
-        country: str,
-        date_from: date,
-        date_to: date,
-    ) -> Dict[str, Any]:
+    # ------------------------------------------------------------------ #
+    # public methods used by stats_service
+    # ------------------------------------------------------------------ #
+    def overview(self, target: str, country: Optional[str] = None) -> Dict[str, Any]:
         """
-        Fetch organic & paid metrics over time for a domain+country.
+        Call Ahrefs Site Explorer 'overview' report.
 
-        NOTE:
-        - This uses a hypothetical /seo-metrics/positions-overview endpoint.
-        - You may decide to use /v3/rank-tracker/positions-overview or
-          /v3/seo-metrics/traffic-overview depending on your Ahrefs docs.
+        Docs pattern (v3):
+        https://api.ahrefs.com/v3/site-explorer/overview?target=example.com
 
-        Replace URL and params according to your v3 docs.
+        Some plans / configs may support a 'country' parameter; we pass it
+        only if provided.
         """
-        url = f"{BASE_URL}/seo-metrics/positions-overview"
-        params = {
-            "target": domain,
-            "target_type": "domain",
-            "country": country,
-            "date_from": date_from.isoformat(),
-            "date_to": date_to.isoformat(),
-            # Request both organic and paid metrics if available
-            "metrics": "organic_keywords,organic_traffic,paid_keywords,paid_traffic",
-            "interval": "day",  # or week/month depending on what you prefer
-        }
+        params: Dict[str, Any] = {"target": target}
 
-        response = requests.get(url, headers=self._headers(), params=params, timeout=30)
-        response.raise_for_status()
-        return response.json()
+        # If your account supports per-country overview, you can uncomment:
+        if country:
+            params["country"] = country
 
-    # ----------- BACKLINKS / REFERRING DOMAINS ----------- #
-
-    def backlinks_overview(
-        self,
-        domain: str,
-        date_from: date,
-        date_to: date,
-    ) -> Dict[str, Any]:
-        """
-        Fetch referring domains over time.
-
-        You might use something like /seo-metrics/backlinks-overview or
-        another v3 endpoint exposed to you.
-        """
-        url = f"{BASE_URL}/seo-metrics/backlinks-overview"
-        params = {
-            "target": domain,
-            "target_type": "domain",
-            "date_from": date_from.isoformat(),
-            "date_to": date_to.isoformat(),
-            "metrics": "refdomains",
-            "interval": "day",
-        }
-
-        response = requests.get(url, headers=self._headers(), params=params, timeout=30)
-        response.raise_for_status()
-        return response.json()
-
-    # ----------- BATCH DOMAIN METRICS (DR / Authority Score) ----------- #
-
-    def batch_domain_metrics(self, domains: List[str]) -> Dict[str, Any]:
-        """
-        Uses /v3/batch-analysis/batch-analysis which you already tested.
-
-        Make sure 'domain_rating' is among the metrics in your docs.
-        """
-        url = f"{BASE_URL}/batch-analysis/batch-analysis"
-        payload = {
-            "targets": domains,
-            "metrics": ["domain_rating"],
-        }
-
-        response = requests.post(url, headers=self._headers(), json=payload, timeout=60)
-        response.raise_for_status()
-        return response.json()
+        return self._get("site-explorer/overview", params)

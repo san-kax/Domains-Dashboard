@@ -13,9 +13,14 @@ from stats_service import get_domain_stats
 
 load_dotenv()
 
-USE_MOCK_DATA = os.getenv("USE_MOCK_DATA", "true").lower() == "true"
-
 st.set_page_config(page_title="Ahrefs Monitoring Dashboard", layout="wide")
+
+# Check both environment variables and Streamlit secrets (for Streamlit Cloud)
+# Default to mock data if not explicitly set to false
+USE_MOCK_DATA_ENV = os.getenv("USE_MOCK_DATA", "")
+USE_MOCK_DATA_SECRET = st.secrets.get("USE_MOCK_DATA", "") if hasattr(st, "secrets") else ""
+USE_MOCK_DATA_STR = USE_MOCK_DATA_SECRET or USE_MOCK_DATA_ENV or "true"
+USE_MOCK_DATA = USE_MOCK_DATA_STR.lower() in ("true", "1", "yes")
 
 st.title("Domains for monitoring")
 
@@ -54,8 +59,19 @@ def fetch_stats(domain: str, country: str, period: str):
     """
     if USE_MOCK_DATA:
         return mock_domain_stats(domain, country, period)
-    client = AhrefsClient()
-    return get_domain_stats(domain, country, period, client)
+    
+    # Try to use real Ahrefs data, but fallback to mock if API key is missing
+    try:
+        client = AhrefsClient()
+        return get_domain_stats(domain, country, period, client)
+    except RuntimeError as e:
+        if "API key is not configured" in str(e):
+            st.warning(
+                f"⚠️ Ahrefs API key not configured. Using mock data for {domain}. "
+                "Set AHREFS_API_TOKEN in Streamlit secrets to use real data."
+            )
+            return mock_domain_stats(domain, country, period)
+        raise
 
 
 # --- Main loop: one "card" per domain+country --- #

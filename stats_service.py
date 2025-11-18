@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 from ahrefs_client import AhrefsClient
 
@@ -11,33 +11,22 @@ from ahrefs_client import AhrefsClient
 # data structure consumed by the Streamlit UI
 # ------------------------------------------------------------------ #
 @dataclass
+class Metric:
+    value: float
+    change_pct: Optional[float]
+    sparkline: List[float]
+
+
+@dataclass
 class DomainStats:
     domain: str
     country: str
-    period: str  # "month" or "year"
-
-    organic_keywords: int
-    organic_keywords_change: float
-
-    organic_traffic: int
-    organic_traffic_change: float
-
-    paid_keywords: int
-    paid_keywords_change: float
-
-    paid_traffic: int
-    paid_traffic_change: float
-
-    ref_domains: int
-    ref_domains_change: float
-
-    authority_score: int
-    authority_change: float
-
-    # tiny arrays used for the little sparkline charts
-    organic_keywords_trend: list[int]
-    organic_traffic_trend: list[int]
-    ref_domains_trend: list[int]
+    organic_keywords: Metric
+    organic_traffic: Metric
+    paid_keywords: Metric
+    paid_traffic: Metric
+    ref_domains: Metric
+    authority_score: float
 
 
 # ------------------------------------------------------------------ #
@@ -52,9 +41,9 @@ def _safe_int(value: Any, default: int = 0) -> int:
         return default
 
 
-def _flat_trend(value: int, points: int) -> list[int]:
+def _flat_trend(value: int, points: int) -> List[float]:
     """Just repeat the current value N times to draw a flat sparkline."""
-    return [value] * max(points, 1)
+    return [float(value)] * max(points, 1)
 
 
 def _extract_metrics_from_overview(payload: Dict[str, Any]) -> Dict[str, int]:
@@ -130,20 +119,30 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
     return DomainStats(
         domain=domain,
         country=country,
-        period=period,
-        organic_keywords=organic_keywords,
-        organic_keywords_change=0.0,
-        organic_traffic=organic_traffic,
-        organic_traffic_change=0.0,
-        paid_keywords=paid_keywords,
-        paid_keywords_change=0.0,
-        paid_traffic=paid_traffic,
-        paid_traffic_change=0.0,
-        ref_domains=ref_domains,
-        ref_domains_change=0.0,
-        authority_score=authority_score,
-        authority_change=0.0,
-        organic_keywords_trend=_flat_trend(organic_keywords, trend_points),
-        organic_traffic_trend=_flat_trend(organic_traffic, trend_points),
-        ref_domains_trend=_flat_trend(ref_domains, trend_points),
+        organic_keywords=Metric(
+            value=float(organic_keywords),
+            change_pct=0.0,  # No historical data available yet
+            sparkline=_flat_trend(organic_keywords, trend_points),
+        ),
+        organic_traffic=Metric(
+            value=float(organic_traffic),
+            change_pct=0.0,  # No historical data available yet
+            sparkline=_flat_trend(organic_traffic, trend_points),
+        ),
+        paid_keywords=Metric(
+            value=float(paid_keywords),
+            change_pct=0.0,  # No historical data available yet
+            sparkline=[],
+        ),
+        paid_traffic=Metric(
+            value=float(paid_traffic),
+            change_pct=0.0,  # No historical data available yet
+            sparkline=[],
+        ),
+        ref_domains=Metric(
+            value=float(ref_domains),
+            change_pct=0.0,  # No historical data available yet
+            sparkline=_flat_trend(ref_domains, trend_points),
+        ),
+        authority_score=float(authority_score),
     )

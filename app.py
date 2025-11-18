@@ -25,7 +25,7 @@ period = st.radio("Period", PERIOD_OPTIONS, horizontal=True, index=0)
 if USE_MOCK_DATA:
     st.info(
         "Using MOCK data (USE_MOCK_DATA=true). "
-        "Set USE_MOCK_DATA=false and configure A_HREFS_API_TOKEN to pull real Ahrefs data."
+        "Set USE_MOCK_DATA=false and configure AHREFS_API_TOKEN to pull real Ahrefs data."
     )
 
 

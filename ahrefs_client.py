@@ -27,7 +27,7 @@ class AhrefsClient:
         if not self.api_key:
             raise RuntimeError(
                 "Ahrefs API key is not configured. "
-                "Set A_HREFS_API_TOKEN in your environment or .env file."
+                "Set AHREFS_API_TOKEN in your environment or .env file."
             )
 
     # ------------------------------------------------------------------ #

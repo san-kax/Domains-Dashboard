@@ -177,50 +177,36 @@ class AhrefsClient:
                 # Debug: Store raw response for troubleshooting
                 metrics["_raw_metrics_response"] = metrics_response
                 
-                # Extract metrics - try different possible response structures
-                # Ahrefs API might return data in different formats
-                data = metrics_response.get("data") or metrics_response.get("metrics") or metrics_response
+                # Extract metrics - Ahrefs API returns: {"metrics": {"org_keywords": ..., "org_traffic": ...}}
+                data = metrics_response.get("metrics") or metrics_response.get("data") or metrics_response
                 
                 # If data is a list, get first item
                 if isinstance(data, list) and len(data) > 0:
                     data = data[0]
                 
-                # Organic Keywords - try multiple possible keys
+                # Organic Keywords - Ahrefs uses "org_keywords" not "organic_keywords"
                 organic_kw = (
-                    data.get("organic_keywords")
+                    data.get("org_keywords")  # Primary key from Ahrefs API
+                    or data.get("organic_keywords")
                     or data.get("organicKeywords")
                     or data.get("keywords")
-                    or data.get("organic_keywords_count")
-                    or (data.get("search", {}) if isinstance(data.get("search"), dict) else {}).get("organic_keywords")
-                    or (data.get("search", {}) if isinstance(data.get("search"), dict) else {}).get("keywords")
                     or 0
                 )
                 metrics["organic_keywords"] = _safe_int(organic_kw)
                 
-                # Organic Traffic - try multiple possible keys
+                # Organic Traffic - Ahrefs uses "org_traffic" not "organic_traffic"
                 organic_tr = (
-                    data.get("organic_traffic")
+                    data.get("org_traffic")  # Primary key from Ahrefs API
+                    or data.get("organic_traffic")
                     or data.get("organicTraffic")
                     or data.get("traffic")
-                    or data.get("organic_traffic_volume")
-                    or (data.get("search", {}) if isinstance(data.get("search"), dict) else {}).get("organic_traffic")
-                    or (data.get("search", {}) if isinstance(data.get("search"), dict) else {}).get("traffic")
                     or 0
                 )
                 metrics["organic_traffic"] = _safe_int(organic_tr)
                 
-                # Referring Domains - try multiple possible keys
-                ref_doms = (
-                    data.get("refdomains")
-                    or data.get("referring_domains")
-                    or data.get("referringDomains")
-                    or data.get("ref_domains")
-                    or data.get("referring_domains_count")
-                    or (data.get("backlinks", {}) if isinstance(data.get("backlinks"), dict) else {}).get("referring_domains")
-                    or (data.get("backlinks", {}) if isinstance(data.get("backlinks"), dict) else {}).get("refdomains")
-                    or 0
-                )
-                metrics["ref_domains"] = _safe_int(ref_doms)
+                # Referring Domains - not in metrics endpoint, need to get from backlinks-stats
+                # Will be set below from backlinks-stats endpoint
+                metrics["ref_domains"] = 0
             else:
                 metrics["organic_keywords"] = 0
                 metrics["organic_traffic"] = 0
@@ -231,11 +217,26 @@ class AhrefsClient:
             metrics["organic_traffic"] = 0
             metrics["ref_domains"] = 0
         
-        # 3. Backlinks Stats - for backlinks count
+        # 3. Backlinks Stats - for backlinks count and referring domains
         try:
-            backlinks_response = self._get("site-explorer/backlinks-stats", backlinks_params)
+            # Ensure country is not in params
+            clean_backlinks_params = {k: v for k, v in backlinks_params.items() if k != "country"}
+            backlinks_response = self._get("site-explorer/backlinks-stats", clean_backlinks_params)
             if isinstance(backlinks_response, dict):
-                data = backlinks_response.get("data") or backlinks_response
+                # Ahrefs API structure might be: {"backlinks_stats": {...}} or {"data": {...}}
+                data = backlinks_response.get("backlinks_stats") or backlinks_response.get("data") or backlinks_response
+                
+                # Extract referring domains - try different possible keys
+                ref_doms = _safe_int(
+                    data.get("refdomains")
+                    or data.get("referring_domains")
+                    or data.get("referringDomains")
+                    or data.get("ref_domains")
+                    or 0
+                )
+                if ref_doms > 0:
+                    metrics["ref_domains"] = ref_doms
+                
                 # Extract backlinks count if available
                 backlinks_count = _safe_int(
                     data.get("backlinks")
@@ -243,11 +244,10 @@ class AhrefsClient:
                     or data.get("total_backlinks")
                     or 0
                 )
-                # Store it if we got it (might not be in the response structure)
                 if backlinks_count > 0:
                     metrics["backlinks"] = backlinks_count
         except Exception as e:
-            # Backlinks stats is optional, so we don't add to errors
+            # Backlinks stats is optional, so we don't add to errors unless it's critical
             pass
         
         # Set defaults for paid metrics (not needed but keeping structure)

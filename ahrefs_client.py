@@ -156,33 +156,53 @@ class AhrefsClient:
         try:
             metrics_response = self._get("site-explorer/metrics", metrics_params)
             if isinstance(metrics_response, dict):
+                # Debug: Store raw response for troubleshooting
+                metrics["_raw_metrics_response"] = metrics_response
+                
                 # Extract metrics - try different possible response structures
+                # Ahrefs API might return data in different formats
                 data = metrics_response.get("data") or metrics_response.get("metrics") or metrics_response
                 
-                # Organic Keywords
-                metrics["organic_keywords"] = _safe_int(
+                # If data is a list, get first item
+                if isinstance(data, list) and len(data) > 0:
+                    data = data[0]
+                
+                # Organic Keywords - try multiple possible keys
+                organic_kw = (
                     data.get("organic_keywords")
                     or data.get("organicKeywords")
                     or data.get("keywords")
+                    or data.get("organic_keywords_count")
+                    or (data.get("search", {}) if isinstance(data.get("search"), dict) else {}).get("organic_keywords")
+                    or (data.get("search", {}) if isinstance(data.get("search"), dict) else {}).get("keywords")
                     or 0
                 )
+                metrics["organic_keywords"] = _safe_int(organic_kw)
                 
-                # Organic Traffic
-                metrics["organic_traffic"] = _safe_int(
+                # Organic Traffic - try multiple possible keys
+                organic_tr = (
                     data.get("organic_traffic")
                     or data.get("organicTraffic")
                     or data.get("traffic")
+                    or data.get("organic_traffic_volume")
+                    or (data.get("search", {}) if isinstance(data.get("search"), dict) else {}).get("organic_traffic")
+                    or (data.get("search", {}) if isinstance(data.get("search"), dict) else {}).get("traffic")
                     or 0
                 )
+                metrics["organic_traffic"] = _safe_int(organic_tr)
                 
-                # Referring Domains
-                metrics["ref_domains"] = _safe_int(
+                # Referring Domains - try multiple possible keys
+                ref_doms = (
                     data.get("refdomains")
                     or data.get("referring_domains")
                     or data.get("referringDomains")
                     or data.get("ref_domains")
+                    or data.get("referring_domains_count")
+                    or (data.get("backlinks", {}) if isinstance(data.get("backlinks"), dict) else {}).get("referring_domains")
+                    or (data.get("backlinks", {}) if isinstance(data.get("backlinks"), dict) else {}).get("refdomains")
                     or 0
                 )
+                metrics["ref_domains"] = _safe_int(ref_doms)
             else:
                 metrics["organic_keywords"] = 0
                 metrics["organic_traffic"] = 0

@@ -114,8 +114,18 @@ def fetch_stats(domain: str, country: str, period: str):
         client = AhrefsClient(api_key=AHREFS_TOKEN) if AHREFS_TOKEN else AhrefsClient()
         result = get_domain_stats(domain, country, period, client)
         
-        # Check if there were any endpoint errors (stored in _errors)
-        # This is handled internally, but we can show warnings if needed
+        # Debug: Check if all metrics are 0, show debug info
+        if (hasattr(result, 'organic_keywords') and result.organic_keywords.value == 0 and
+            hasattr(result, 'organic_traffic') and result.organic_traffic.value == 0 and
+            hasattr(result, 'ref_domains') and result.ref_domains.value == 0):
+            # Check if we have raw response data to debug
+            overview_data = client.overview(target=domain, country=country)
+            if overview_data.get("_raw_metrics_response"):
+                with st.expander("🔍 Debug: API Response Structure (click to view)"):
+                    st.warning("⚠️ All metrics are 0. Showing raw API response to help diagnose the issue:")
+                    st.json(overview_data.get("_raw_metrics_response"))
+                    st.info("💡 Please share this JSON structure so we can update the parsing logic.")
+        
         return result
     except RuntimeError as e:
         if "API key is not configured" in str(e):

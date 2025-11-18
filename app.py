@@ -15,12 +15,54 @@ load_dotenv()
 
 st.set_page_config(page_title="Ahrefs Monitoring Dashboard", layout="wide")
 
+# Check for API token in Streamlit secrets (after Streamlit is initialized)
+# Check both naming conventions: AHREFS_API_TOKEN and A_HREFS_API_TOKEN
+def get_ahrefs_token():
+    """Get Ahrefs API token from Streamlit secrets or environment variables."""
+    token = ""
+    
+    # Try Streamlit secrets first (for Streamlit Cloud)
+    if hasattr(st, "secrets"):
+        try:
+            # Try both naming conventions - check if key exists
+            if "AHREFS_API_TOKEN" in st.secrets:
+                token = str(st.secrets["AHREFS_API_TOKEN"]).strip()
+            elif "A_HREFS_API_TOKEN" in st.secrets:
+                token = str(st.secrets["A_HREFS_API_TOKEN"]).strip()
+        except (AttributeError, KeyError, TypeError, Exception) as e:
+            # Secrets not available or key doesn't exist
+            pass
+    
+    # If no token from secrets, try environment variables
+    if not token:
+        token = os.getenv("AHREFS_API_TOKEN", "").strip() or os.getenv("A_HREFS_API_TOKEN", "").strip()
+    
+    return token
+
 # Check both environment variables and Streamlit secrets (for Streamlit Cloud)
 # Default to mock data if not explicitly set to false
-USE_MOCK_DATA_ENV = os.getenv("USE_MOCK_DATA", "")
-USE_MOCK_DATA_SECRET = st.secrets.get("USE_MOCK_DATA", "") if hasattr(st, "secrets") else ""
-USE_MOCK_DATA_STR = USE_MOCK_DATA_SECRET or USE_MOCK_DATA_ENV or "true"
-USE_MOCK_DATA = USE_MOCK_DATA_STR.lower() in ("true", "1", "yes")
+USE_MOCK_DATA_STR = "true"  # Default
+if hasattr(st, "secrets"):
+    try:
+        if "USE_MOCK_DATA" in st.secrets:
+            USE_MOCK_DATA_STR = str(st.secrets["USE_MOCK_DATA"]).strip()
+    except (AttributeError, KeyError, TypeError, Exception):
+        pass
+
+# If not found in secrets, check environment variables
+if USE_MOCK_DATA_STR == "true":
+    USE_MOCK_DATA_STR = os.getenv("USE_MOCK_DATA", "true")
+# If explicitly set to false, use real data (if token available)
+# Otherwise default to mock data
+USE_MOCK_DATA = USE_MOCK_DATA_STR.lower() not in ("false", "0", "no")
+
+# Get API token
+AHREFS_TOKEN = get_ahrefs_token()
+
+# If USE_MOCK_DATA is false but no token, show warning and use mock data
+if not USE_MOCK_DATA and not AHREFS_TOKEN:
+    st.warning("⚠️ USE_MOCK_DATA is set to false but no API token found. Using mock data.")
+    USE_MOCK_DATA = True
 
 st.title("Domains for monitoring")
 
@@ -29,9 +71,14 @@ period = st.radio("Period", PERIOD_OPTIONS, horizontal=True, index=0)
 
 if USE_MOCK_DATA:
     st.info(
-        "Using MOCK data (USE_MOCK_DATA=true). "
-        "Set USE_MOCK_DATA=false and configure AHREFS_API_TOKEN to pull real Ahrefs data."
+        "ℹ️ Using MOCK data. "
+        "Set USE_MOCK_DATA=false and configure A_HREFS_API_TOKEN in Streamlit secrets to use real Ahrefs data."
     )
+else:
+    if AHREFS_TOKEN:
+        st.success("✅ Using real Ahrefs API data")
+    else:
+        st.warning("⚠️ USE_MOCK_DATA=false but no API token found. Check your Streamlit secrets.")
 
 
 def metric_block(title: str, metric, show_chart: bool = True):
@@ -62,13 +109,14 @@ def fetch_stats(domain: str, country: str, period: str):
     
     # Try to use real Ahrefs data, but fallback to mock if API key is missing
     try:
-        client = AhrefsClient()
+        # Use the token we got from secrets/env
+        client = AhrefsClient(api_key=AHREFS_TOKEN) if AHREFS_TOKEN else AhrefsClient()
         return get_domain_stats(domain, country, period, client)
     except RuntimeError as e:
         if "API key is not configured" in str(e):
             st.warning(
                 f"⚠️ Ahrefs API key not configured. Using mock data for {domain}. "
-                "Set AHREFS_API_TOKEN in Streamlit secrets to use real data."
+                "Set AHREFS_API_TOKEN or A_HREFS_API_TOKEN in Streamlit secrets to use real data."
             )
             return mock_domain_stats(domain, country, period)
         raise

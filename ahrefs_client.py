@@ -7,6 +7,16 @@ import requests
 from config import AHREFS_API_BASE_URL, AHREFS_API_TOKEN, API_TIMEOUT
 
 
+def _safe_int(value: Any, default: int = 0) -> int:
+    """Safely convert value to int."""
+    try:
+        if value is None:
+            return default
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
 class AhrefsClient:
     """
     Very small wrapper around the Ahrefs v3 API.
@@ -73,69 +83,141 @@ class AhrefsClient:
     # ------------------------------------------------------------------ #
     def overview(self, target: str, country: Optional[str] = None) -> Dict[str, Any]:
         """
-        Fetch overview metrics by calling multiple Ahrefs API v3 endpoints.
+        Fetch overview metrics using the correct Ahrefs API v3 endpoints.
         
-        Ahrefs v3 uses specific endpoints for each metric:
+        Uses the following endpoints:
         - site-explorer/domain-rating for DR
-        - site-explorer/organic-keywords for organic keywords
-        - site-explorer/organic-traffic for organic traffic
-        - site-explorer/refdomains for referring domains
+        - site-explorer/metrics for organic keywords, organic traffic, referring domains
+        - site-explorer/backlinks-stats for backlinks count
         """
-        from datetime import datetime
+        from datetime import datetime, timedelta
         
         # Ensure target ends with / as required by Ahrefs API
         if not target.endswith('/'):
             target = f"{target}/"
         
-        # Base parameters for all endpoints
-        base_params: Dict[str, Any] = {
+        today = datetime.now()
+        date_str = today.strftime("%Y-%m-%d")
+        
+        # Base parameters for metrics endpoint
+        metrics_params: Dict[str, Any] = {
             "target": target,
+            "date": date_str,
+            "mode": "subdomains",
             "protocol": "both",
-            "date": datetime.now().strftime("%Y-%m-%d")
+            "volume_mode": "monthly"
         }
         
-        # Add country if provided (some endpoints may support it)
+        # Base parameters for domain-rating endpoint
+        dr_params: Dict[str, Any] = {
+            "target": target,
+            "date": date_str,
+            "protocol": "both"
+        }
+        
+        # Base parameters for backlinks-stats endpoint
+        backlinks_params: Dict[str, Any] = {
+            "target": target,
+            "date": date_str,
+            "mode": "subdomains",
+            "protocol": "both"
+        }
+        
+        # Add country if provided (if supported by endpoints)
         if country:
-            base_params["country"] = country
+            metrics_params["country"] = country
         
-        # Fetch metrics from different endpoints
         metrics = {}
+        errors = []
         
-        # 1. Domain Rating (DR)
+        # 1. Domain Rating (DR) - from domain-rating endpoint
         try:
-            dr_response = self._get("site-explorer/domain-rating", base_params)
+            dr_response = self._get("site-explorer/domain-rating", dr_params)
             if isinstance(dr_response, dict):
-                # Extract DR value - structure may vary
-                metrics["domain_rating"] = dr_response.get("domain_rating") or dr_response.get("dr") or dr_response.get("value") or 0
+                # Extract DR value - try different possible keys
+                dr_value = (
+                    dr_response.get("domain_rating")
+                    or dr_response.get("dr")
+                    or dr_response.get("value")
+                    or (dr_response.get("data", {}).get("domain_rating") if isinstance(dr_response.get("data"), dict) else None)
+                    or (dr_response.get("data", {}).get("dr") if isinstance(dr_response.get("data"), dict) else None)
+                    or 0
+                )
+                metrics["domain_rating"] = int(dr_value) if dr_value else 0
+            elif isinstance(dr_response, (int, float)):
+                metrics["domain_rating"] = int(dr_response)
+            else:
+                metrics["domain_rating"] = 0
         except Exception as e:
+            errors.append(f"Domain Rating: {str(e)}")
             metrics["domain_rating"] = 0
         
-        # 2. Organic Keywords
+        # 2. Main metrics endpoint - contains organic keywords, organic traffic, referring domains
         try:
-            keywords_response = self._get("site-explorer/organic-keywords", base_params)
-            if isinstance(keywords_response, dict):
-                metrics["organic_keywords"] = keywords_response.get("organic_keywords") or keywords_response.get("keywords") or keywords_response.get("value") or 0
+            metrics_response = self._get("site-explorer/metrics", metrics_params)
+            if isinstance(metrics_response, dict):
+                # Extract metrics - try different possible response structures
+                data = metrics_response.get("data") or metrics_response.get("metrics") or metrics_response
+                
+                # Organic Keywords
+                metrics["organic_keywords"] = _safe_int(
+                    data.get("organic_keywords")
+                    or data.get("organicKeywords")
+                    or data.get("keywords")
+                    or 0
+                )
+                
+                # Organic Traffic
+                metrics["organic_traffic"] = _safe_int(
+                    data.get("organic_traffic")
+                    or data.get("organicTraffic")
+                    or data.get("traffic")
+                    or 0
+                )
+                
+                # Referring Domains
+                metrics["ref_domains"] = _safe_int(
+                    data.get("refdomains")
+                    or data.get("referring_domains")
+                    or data.get("referringDomains")
+                    or data.get("ref_domains")
+                    or 0
+                )
+            else:
+                metrics["organic_keywords"] = 0
+                metrics["organic_traffic"] = 0
+                metrics["ref_domains"] = 0
         except Exception as e:
+            errors.append(f"Metrics endpoint: {str(e)}")
             metrics["organic_keywords"] = 0
-        
-        # 3. Organic Traffic
-        try:
-            traffic_response = self._get("site-explorer/organic-traffic", base_params)
-            if isinstance(traffic_response, dict):
-                metrics["organic_traffic"] = traffic_response.get("organic_traffic") or traffic_response.get("traffic") or traffic_response.get("value") or 0
-        except Exception as e:
             metrics["organic_traffic"] = 0
-        
-        # 4. Referring Domains
-        try:
-            refdomains_response = self._get("site-explorer/refdomains", base_params)
-            if isinstance(refdomains_response, dict):
-                metrics["ref_domains"] = refdomains_response.get("refdomains") or refdomains_response.get("referring_domains") or refdomains_response.get("value") or 0
-        except Exception as e:
             metrics["ref_domains"] = 0
+        
+        # 3. Backlinks Stats - for backlinks count
+        try:
+            backlinks_response = self._get("site-explorer/backlinks-stats", backlinks_params)
+            if isinstance(backlinks_response, dict):
+                data = backlinks_response.get("data") or backlinks_response
+                # Extract backlinks count if available
+                backlinks_count = _safe_int(
+                    data.get("backlinks")
+                    or data.get("backlinks_count")
+                    or data.get("total_backlinks")
+                    or 0
+                )
+                # Store it if we got it (might not be in the response structure)
+                if backlinks_count > 0:
+                    metrics["backlinks"] = backlinks_count
+        except Exception as e:
+            # Backlinks stats is optional, so we don't add to errors
+            pass
         
         # Set defaults for paid metrics (not needed but keeping structure)
         metrics["paid_keywords"] = 0
         metrics["paid_traffic"] = 0
+        
+        # Store errors in metrics for debugging (optional)
+        if errors:
+            metrics["_errors"] = errors
         
         return metrics

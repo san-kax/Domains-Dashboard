@@ -112,7 +112,11 @@ def fetch_stats(domain: str, country: str, period: str):
     try:
         # Use the token we got from secrets/env
         client = AhrefsClient(api_key=AHREFS_TOKEN) if AHREFS_TOKEN else AhrefsClient()
-        return get_domain_stats(domain, country, period, client)
+        result = get_domain_stats(domain, country, period, client)
+        
+        # Check if there were any endpoint errors (stored in _errors)
+        # This is handled internally, but we can show warnings if needed
+        return result
     except RuntimeError as e:
         if "API key is not configured" in str(e):
             st.warning(
@@ -125,7 +129,12 @@ def fetch_stats(domain: str, country: str, period: str):
         # Handle HTTP errors from Ahrefs API
         error_msg = str(e)
         st.error(f"❌ Ahrefs API Error for {domain}: {error_msg}")
-        st.info("🔄 Falling back to mock data. Please check your API token and permissions.")
+        
+        # Show more details for 404 errors
+        if hasattr(e, 'response') and e.response and e.response.status_code == 404:
+            st.info("💡 Tip: Some Ahrefs API endpoints may not be available in your plan. The app will use available data and fall back to mock data for missing metrics.")
+        
+        st.info("🔄 Falling back to mock data. Please check your API token, permissions, and endpoint availability.")
         return mock_domain_stats(domain, country, period)
     except Exception as e:
         # Handle any other errors

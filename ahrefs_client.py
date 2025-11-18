@@ -73,18 +73,56 @@ class AhrefsClient:
     # ------------------------------------------------------------------ #
     def overview(self, target: str, country: Optional[str] = None) -> Dict[str, Any]:
         """
-        Call Ahrefs Site Explorer 'overview' report.
-
-        Docs pattern (v3):
-        https://api.ahrefs.com/v3/site-explorer/overview?target=example.com
-
-        Some plans / configs may support a 'country' parameter; we pass it
-        only if provided.
+        Call Ahrefs Site Explorer metrics.
+        
+        Note: Ahrefs API v3 endpoint structure may vary. This method tries common patterns.
+        If all fail, check the Ahrefs API documentation for your specific API version.
         """
         params: Dict[str, Any] = {"target": target}
 
-        # If your account supports per-country overview, you can uncomment:
+        # If your account supports per-country overview, add country parameter
         if country:
             params["country"] = country
 
-        return self._get("site-explorer/overview", params)
+        # Try different endpoint patterns for Ahrefs v3
+        # Based on common API patterns, trying these in order:
+        endpoints_to_try = [
+            ("site-explorer/metrics", params),  # Common v3 pattern with metrics
+            ("site-explorer", {**params, "report": "overview"}),  # With report parameter
+            ("site-explorer", params),  # Base endpoint
+        ]
+        
+        last_error = None
+        for endpoint, endpoint_params in endpoints_to_try:
+            try:
+                return self._get(endpoint, endpoint_params)
+            except requests.HTTPError as e:
+                last_error = e
+                # If it's not a 404, the endpoint exists but has other issues (auth, params, etc.)
+                if hasattr(e, 'response') and e.response.status_code != 404:
+                    # Endpoint exists but has other issues - return that error
+                    raise
+                # Continue to next endpoint if 404
+                continue
+        
+        # If all endpoints failed with 404, provide helpful error message
+        if last_error:
+            error_details = []
+            if hasattr(last_error, 'response') and last_error.response is not None:
+                try:
+                    error_body = last_error.response.json()
+                    error_details.append(f"API response: {error_body}")
+                except:
+                    error_details.append(f"API response text: {last_error.response.text[:200]}")
+            
+            raise requests.HTTPError(
+                f"Ahrefs API endpoint not found (HTTP 404). "
+                f"Tried endpoints: site-explorer/metrics, site-explorer with report parameter, site-explorer. "
+                f"Please verify:\n"
+                f"1. Your API token has access to Site Explorer reports\n"
+                f"2. The correct endpoint path for your Ahrefs API version\n"
+                f"3. Check Ahrefs API documentation: https://ahrefs.com/api/documentation\n"
+                f"Error details: {str(last_error)}",
+                response=getattr(last_error, 'response', None)
+            )
+        raise RuntimeError("Failed to call Ahrefs API - no endpoints available")

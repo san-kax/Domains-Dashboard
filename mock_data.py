@@ -81,7 +81,7 @@ def mock_domain_stats(domain: str, country: str, period: str) -> DomainStats:
         ),
         paid_traffic=Metric(
             value=0,
-           change_pct=0.0,
+            change_pct=0.0,
             sparkline=[],
         ),
         ref_domains=Metric(

@@ -48,37 +48,41 @@ def _flat_trend(value: int, points: int) -> List[float]:
 
 def _extract_metrics_from_overview(payload: Dict[str, Any]) -> Dict[str, int]:
     """
-    Ahrefs v3 'overview' response shape can change / differ by plan.
-    We'll be conservative and try a few common key patterns.
-
-    After you run this once with your key, you can temporarily print
-    the raw payload in Streamlit to see the exact structure and then
-    tighten these mappings.
+    Extract metrics from Ahrefs API v3 response.
+    
+    The overview() method now returns metrics directly as a dictionary,
+    so we can use them as-is.
     """
-    # Sometimes metrics are nested; sometimes top-level.
+    # The payload is already a metrics dictionary from overview()
+    # Handle both nested and flat structures
     metrics: Dict[str, Any] = payload.get("metrics") or payload
 
     organic_traffic = _safe_int(
-        metrics.get("organic_traffic", metrics.get("organicTraffic"))
+        metrics.get("organic_traffic") or metrics.get("organicTraffic") or 0
     )
     organic_keywords = _safe_int(
-        metrics.get("organic_keywords", metrics.get("organicKeywords"))
+        metrics.get("organic_keywords") or metrics.get("organicKeywords") or 0
     )
     paid_traffic = _safe_int(
-        metrics.get("paid_traffic", metrics.get("paidTraffic"))
+        metrics.get("paid_traffic") or metrics.get("paidTraffic") or 0
     )
     paid_keywords = _safe_int(
-        metrics.get("paid_keywords", metrics.get("paidKeywords"))
+        metrics.get("paid_keywords") or metrics.get("paidKeywords") or 0
     )
 
     ref_domains = _safe_int(
         metrics.get("ref_domains")
         or metrics.get("referring_domains")
         or metrics.get("referringDomains")
+        or metrics.get("refdomains")
+        or 0
     )
 
     authority_score = _safe_int(
-        metrics.get("domain_rating", metrics.get("domainRating"))
+        metrics.get("domain_rating")
+        or metrics.get("domainRating")
+        or metrics.get("dr")
+        or 0
     )
 
     return {

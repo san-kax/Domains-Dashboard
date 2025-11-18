@@ -137,26 +137,28 @@ class AhrefsClient:
             
             if isinstance(dr_response, dict):
                 # Handle nested structure: {"domain_rating": {"domain_rating": 78, ...}}
-                if "domain_rating" in dr_response and isinstance(dr_response["domain_rating"], dict):
-                    # Nested structure - extract from inner dict
+                if "domain_rating" in dr_response:
                     inner = dr_response["domain_rating"]
-                    dr_value = (
-                        inner.get("domain_rating")
-                        or inner.get("dr")
-                        or inner.get("value")
-                        or 0
-                    )
+                    if isinstance(inner, dict):
+                        # Nested structure - extract from inner dict
+                        dr_value = inner.get("domain_rating") or inner.get("dr") or inner.get("value")
+                    else:
+                        # Direct value
+                        dr_value = inner
                 else:
-                    # Flat structure - try different possible keys
-                    dr_value = (
-                        dr_response.get("domain_rating")
-                        or dr_response.get("dr")
-                        or dr_response.get("value")
-                        or (dr_response.get("data", {}).get("domain_rating") if isinstance(dr_response.get("data"), dict) else None)
-                        or (dr_response.get("data", {}).get("dr") if isinstance(dr_response.get("data"), dict) else None)
-                        or 0
-                    )
-                metrics["domain_rating"] = int(dr_value) if dr_value and not isinstance(dr_value, dict) else 0
+                    # Try flat structure
+                    dr_value = dr_response.get("domain_rating") or dr_response.get("dr") or dr_response.get("value")
+                
+                # Convert to int only if it's a number
+                if dr_value is not None:
+                    if isinstance(dr_value, (int, float)):
+                        metrics["domain_rating"] = int(dr_value)
+                    elif isinstance(dr_value, str) and dr_value.isdigit():
+                        metrics["domain_rating"] = int(dr_value)
+                    else:
+                        metrics["domain_rating"] = 0
+                else:
+                    metrics["domain_rating"] = 0
             elif isinstance(dr_response, (int, float)):
                 metrics["domain_rating"] = int(dr_response)
             else:
@@ -166,8 +168,11 @@ class AhrefsClient:
             metrics["domain_rating"] = 0
         
         # 2. Main metrics endpoint - contains organic keywords, organic traffic, referring domains
+        # IMPORTANT: Do NOT pass country parameter - it causes HTTP 400 error
         try:
-            metrics_response = self._get("site-explorer/metrics", metrics_params)
+            # Ensure country is not in params (in case it was added elsewhere)
+            clean_metrics_params = {k: v for k, v in metrics_params.items() if k != "country"}
+            metrics_response = self._get("site-explorer/metrics", clean_metrics_params)
             if isinstance(metrics_response, dict):
                 # Debug: Store raw response for troubleshooting
                 metrics["_raw_metrics_response"] = metrics_response

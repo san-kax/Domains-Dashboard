@@ -29,7 +29,8 @@ def _get_config(key: str, default: str = "") -> str:
 # Existing config (MONITORED_DOMAINS, PERIOD_OPTIONS, etc...)
 
 AHREFS_API_BASE_URL = _get_config("AHREFS_API_BASE_URL", "https://api.ahrefs.com/v3")
-AHREFS_API_TOKEN = _get_config("AHREFS_API_TOKEN", "")
+# Check both naming conventions (with and without underscore) for backward compatibility
+AHREFS_API_TOKEN = _get_config("AHREFS_API_TOKEN", "") or _get_config("A_HREFS_API_TOKEN", "")
 API_TIMEOUT = int(_get_config("API_TIMEOUT", "30"))
 
 # Period options for the dashboard

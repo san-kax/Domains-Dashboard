@@ -94,8 +94,8 @@ for item in MONITORED_DOMAINS:
     with header_cols[1]:
         st.metric("Authority Score", f"{stats.authority_score:.0f}")
 
-    # Metrics row: Organic KW, Organic Traffic, Paid KW, Paid Traffic, Ref Domains
-    c1, c2, c3, c4, c5 = st.columns([2, 2, 2, 2, 2])
+    # Metrics row: Organic KW, Organic Traffic, Ref Domains
+    c1, c2, c3 = st.columns([2, 2, 2])
 
     with c1:
         metric_block("Organic Keywords", stats.organic_keywords)
@@ -104,12 +104,6 @@ for item in MONITORED_DOMAINS:
         metric_block("Organic Traffic", stats.organic_traffic)
 
     with c3:
-        metric_block("Paid Keywords", stats.paid_keywords, show_chart=False)
-
-    with c4:
-        metric_block("Paid Traffic", stats.paid_traffic, show_chart=False)
-
-    with c5:
         metric_block("Ref. Domains", stats.ref_domains)
 
 

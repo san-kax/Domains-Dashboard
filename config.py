@@ -1,11 +1,10 @@
-# config.py
+import os
+from dotenv import load_dotenv
 
-MONITORED_DOMAINS = [
-    {"domain": "gambling.com", "country": "AU", "label": "gambling.com AU", "flag": "🇦🇺"},
-    {"domain": "gambling.com", "country": "NZ", "label": "gambling.com NZ", "flag": "🇳🇿"},
-    # Add more here:
-    # {"domain": "example.com", "country": "US", "label": "example.com US", "flag": "🇺🇸"},
-]
+load_dotenv()
 
-# Default period options for the radio button
-PERIOD_OPTIONS = ["Month", "Year"]
+# Existing config (MONITORED_DOMAINS, PERIOD_OPTIONS, etc...)
+
+AHREFS_API_BASE_URL = os.getenv("AHREFS_API_BASE_URL", "https://api.ahrefs.com/v3")
+AHREFS_API_TOKEN = os.getenv("AHREFS_API_TOKEN")
+API_TIMEOUT = int(os.getenv("API_TIMEOUT", "30"))

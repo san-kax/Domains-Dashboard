@@ -1,171 +1,149 @@
 # stats_service.py
+from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, timedelta
-from typing import List, Optional
+from typing import Any, Dict
 
 from ahrefs_client import AhrefsClient
 
 
-@dataclass
-class Metric:
-    value: float
-    change_pct: Optional[float]
-    sparkline: List[float]
-
-
+# ------------------------------------------------------------------ #
+# data structure consumed by the Streamlit UI
+# ------------------------------------------------------------------ #
 @dataclass
 class DomainStats:
     domain: str
     country: str
-    organic_keywords: Metric
-    organic_traffic: Metric
-    paid_keywords: Metric
-    paid_traffic: Metric
-    ref_domains: Metric
-    authority_score: float
+    period: str  # "month" or "year"
+
+    organic_keywords: int
+    organic_keywords_change: float
+
+    organic_traffic: int
+    organic_traffic_change: float
+
+    paid_keywords: int
+    paid_keywords_change: float
+
+    paid_traffic: int
+    paid_traffic_change: float
+
+    ref_domains: int
+    ref_domains_change: float
+
+    authority_score: int
+    authority_change: float
+
+    # tiny arrays used for the little sparkline charts
+    organic_keywords_trend: list[int]
+    organic_traffic_trend: list[int]
+    ref_domains_trend: list[int]
 
 
-def _period_dates(period: str):
+# ------------------------------------------------------------------ #
+# helpers
+# ------------------------------------------------------------------ #
+def _safe_int(value: Any, default: int = 0) -> int:
+    try:
+        if value is None:
+            return default
+        return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def _flat_trend(value: int, points: int) -> list[int]:
+    """Just repeat the current value N times to draw a flat sparkline."""
+    return [value] * max(points, 1)
+
+
+def _extract_metrics_from_overview(payload: Dict[str, Any]) -> Dict[str, int]:
     """
-    For 'Month': last 30 days vs previous 30.
-    For 'Year': last 365 days vs previous 365.
+    Ahrefs v3 'overview' response shape can change / differ by plan.
+    We'll be conservative and try a few common key patterns.
+
+    After you run this once with your key, you can temporarily print
+    the raw payload in Streamlit to see the exact structure and then
+    tighten these mappings.
     """
-    today = date.today()
-    period = period.lower()
-    days = 30 if period == "month" else 365
+    # Sometimes metrics are nested; sometimes top-level.
+    metrics: Dict[str, Any] = payload.get("metrics") or payload
 
-    current_from = today - timedelta(days=days)
-    current_to = today
+    organic_traffic = _safe_int(
+        metrics.get("organic_traffic", metrics.get("organicTraffic"))
+    )
+    organic_keywords = _safe_int(
+        metrics.get("organic_keywords", metrics.get("organicKeywords"))
+    )
+    paid_traffic = _safe_int(
+        metrics.get("paid_traffic", metrics.get("paidTraffic"))
+    )
+    paid_keywords = _safe_int(
+        metrics.get("paid_keywords", metrics.get("paidKeywords"))
+    )
 
-    prev_to = current_from - timedelta(days=1)
-    prev_from = prev_to - timedelta(days=days - 1)
+    ref_domains = _safe_int(
+        metrics.get("ref_domains")
+        or metrics.get("referring_domains")
+        or metrics.get("referringDomains")
+    )
 
-    return current_from, current_to, prev_from, prev_to
+    authority_score = _safe_int(
+        metrics.get("domain_rating", metrics.get("domainRating"))
+    )
 
-
-def _pct_change(current: float, previous: float) -> Optional[float]:
-    if previous == 0:
-        return None
-    return (current - previous) / previous * 100.0
-
-
-def _extract_metric_from_positions(resp: dict, metric_key: str) -> Metric:
-    """
-    Extract a Metric from the positions_overview response.
-
-    You MUST adapt this to the exact shape of your v3 response.
-    As a starting guess, we're assuming something like:
-
-    {
-      "metrics": {
-        "organic_keywords": {
-          "total": 6400,
-          "history": [
-             {"date": "2024-10-01", "value": 6500},
-             ...
-          ]
-        },
-        ...
-      }
+    return {
+        "organic_traffic": organic_traffic,
+        "organic_keywords": organic_keywords,
+        "paid_traffic": paid_traffic,
+        "paid_keywords": paid_keywords,
+        "ref_domains": ref_domains,
+        "authority_score": authority_score,
     }
-    """
-    metrics = resp.get("metrics", {})
-    metric_info = metrics.get(metric_key, {})
-
-    total = float(metric_info.get("total", 0.0))
-    history = metric_info.get("history", [])
-    sparkline = [float(point.get("value", 0.0)) for point in history]
-
-    return Metric(value=total, change_pct=None, sparkline=sparkline)
 
 
-def _extract_refdomains(resp: dict) -> Metric:
-    """
-    Extract referring domains metric from backlinks_overview response.
-
-    Again, adapt to actual response. Assumed pattern:
-
-    {
-      "metrics": {
-        "refdomains": {
-          "total": 41000,
-          "history": [
-             {"date": "2024-10-01", "value": 39500},
-             ...
-          ]
-        }
-      }
-    }
-    """
-    metrics = resp.get("metrics", {})
-    metric_info = metrics.get("refdomains", {})
-
-    total = float(metric_info.get("total", 0.0))
-    history = metric_info.get("history", [])
-    sparkline = [float(point.get("value", 0.0)) for point in history]
-
-    return Metric(value=total, change_pct=None, sparkline=sparkline)
-
-
+# ------------------------------------------------------------------ #
+# main function used by app.py
+# ------------------------------------------------------------------ #
 def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClient) -> DomainStats:
-    current_from, current_to, prev_from, prev_to = _period_dates(period)
+    """
+    Fetch and normalize metrics for a single domain+country+period combination.
 
-    # -------- fetch current period -------- #
-    pos_current = client.positions_overview(domain, country, current_from, current_to)
-    back_current = client.backlinks_overview(domain, current_from, current_to)
+    For now we only call Site Explorer 'overview', and we **don't** try to
+    compute previous-period deltas from the API (no time-range endpoint used).
+    So all *_change values are 0.0 and sparkline charts are flat.
+    """
 
-    organic_keywords_curr = _extract_metric_from_positions(pos_current, "organic_keywords")
-    organic_traffic_curr = _extract_metric_from_positions(pos_current, "organic_traffic")
-    paid_keywords_curr = _extract_metric_from_positions(pos_current, "paid_keywords")
-    paid_traffic_curr = _extract_metric_from_positions(pos_current, "paid_traffic")
-    ref_domains_curr = _extract_refdomains(back_current)
+    overview_raw = client.overview(target=domain, country=country)
+    metrics = _extract_metrics_from_overview(overview_raw)
 
-    # -------- fetch previous period -------- #
-    pos_prev = client.positions_overview(domain, country, prev_from, prev_to)
-    back_prev = client.backlinks_overview(domain, prev_from, prev_to)
+    organic_traffic = metrics["organic_traffic"]
+    organic_keywords = metrics["organic_keywords"]
+    paid_traffic = metrics["paid_traffic"]
+    paid_keywords = metrics["paid_keywords"]
+    ref_domains = metrics["ref_domains"]
+    authority_score = metrics["authority_score"]
 
-    organic_keywords_prev = _extract_metric_from_positions(pos_prev, "organic_keywords")
-    organic_traffic_prev = _extract_metric_from_positions(pos_prev, "organic_traffic")
-    paid_keywords_prev = _extract_metric_from_positions(pos_prev, "paid_keywords")
-    paid_traffic_prev = _extract_metric_from_positions(pos_prev, "paid_traffic")
-    ref_domains_prev = _extract_refdomains(back_prev)
-
-    # -------- compute % changes -------- #
-    organic_keywords_curr.change_pct = _pct_change(
-        organic_keywords_curr.value, organic_keywords_prev.value
-    )
-    organic_traffic_curr.change_pct = _pct_change(
-        organic_traffic_curr.value, organic_traffic_prev.value
-    )
-    paid_keywords_curr.change_pct = _pct_change(
-        paid_keywords_curr.value, paid_keywords_prev.value
-    )
-    paid_traffic_curr.change_pct = _pct_change(
-        paid_traffic_curr.value, paid_traffic_prev.value
-    )
-    ref_domains_curr.change_pct = _pct_change(ref_domains_curr.value, ref_domains_prev.value)
-
-    # -------- authority score (DR) -------- #
-    batch = client.batch_domain_metrics([domain])
-    # Adjust this indexing to match your real batch-analysis response
-    # Example assumption:
-    # {
-    #   "results": {
-    #       "gambling.com": {"domain_rating": 52}
-    #   }
-    # }
-    results = batch.get("results", {})
-    dom_info = results.get(domain, {})
-    dr = float(dom_info.get("domain_rating", 0.0))
+    # how many points to show in the little inline charts
+    trend_points = 6 if period == "month" else 12
 
     return DomainStats(
         domain=domain,
         country=country,
-        organic_keywords=organic_keywords_curr,
-        organic_traffic=organic_traffic_curr,
-        paid_keywords=paid_keywords_curr,
-        paid_traffic=paid_traffic_curr,
-        ref_domains=ref_domains_curr,
-        authority_score=dr,
+        period=period,
+        organic_keywords=organic_keywords,
+        organic_keywords_change=0.0,
+        organic_traffic=organic_traffic,
+        organic_traffic_change=0.0,
+        paid_keywords=paid_keywords,
+        paid_keywords_change=0.0,
+        paid_traffic=paid_traffic,
+        paid_traffic_change=0.0,
+        ref_domains=ref_domains,
+        ref_domains_change=0.0,
+        authority_score=authority_score,
+        authority_change=0.0,
+        organic_keywords_trend=_flat_trend(organic_keywords, trend_points),
+        organic_traffic_trend=_flat_trend(organic_traffic, trend_points),
+        ref_domains_trend=_flat_trend(ref_domains, trend_points),
     )

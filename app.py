@@ -3,6 +3,7 @@
 import os
 
 import pandas as pd
+import requests
 import streamlit as st
 from dotenv import load_dotenv
 
@@ -107,7 +108,7 @@ def fetch_stats(domain: str, country: str, period: str):
     if USE_MOCK_DATA:
         return mock_domain_stats(domain, country, period)
     
-    # Try to use real Ahrefs data, but fallback to mock if API key is missing
+    # Try to use real Ahrefs data, but fallback to mock if API key is missing or request fails
     try:
         # Use the token we got from secrets/env
         client = AhrefsClient(api_key=AHREFS_TOKEN) if AHREFS_TOKEN else AhrefsClient()
@@ -120,6 +121,17 @@ def fetch_stats(domain: str, country: str, period: str):
             )
             return mock_domain_stats(domain, country, period)
         raise
+    except requests.HTTPError as e:
+        # Handle HTTP errors from Ahrefs API
+        error_msg = str(e)
+        st.error(f"❌ Ahrefs API Error for {domain}: {error_msg}")
+        st.info("🔄 Falling back to mock data. Please check your API token and permissions.")
+        return mock_domain_stats(domain, country, period)
+    except Exception as e:
+        # Handle any other errors
+        st.error(f"❌ Error fetching data for {domain}: {str(e)}")
+        st.info("🔄 Falling back to mock data.")
+        return mock_domain_stats(domain, country, period)
 
 
 # --- Main loop: one "card" per domain+country --- #

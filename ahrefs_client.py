@@ -178,30 +178,47 @@ class AhrefsClient:
                 metrics["_raw_metrics_response"] = metrics_response
                 
                 # Extract metrics - Ahrefs API returns: {"metrics": {"org_keywords": ..., "org_traffic": ...}}
-                data = metrics_response.get("metrics") or metrics_response.get("data") or metrics_response
+                # Get the inner metrics dict
+                data = metrics_response.get("metrics")
+                if data is None:
+                    data = metrics_response.get("data")
+                if data is None:
+                    data = metrics_response
                 
                 # If data is a list, get first item
                 if isinstance(data, list) and len(data) > 0:
                     data = data[0]
                 
+                # Ensure data is a dict
+                if not isinstance(data, dict):
+                    data = {}
+                
+                # Debug: Store extracted data for troubleshooting
+                metrics["_extracted_data"] = data
+                
                 # Organic Keywords - Ahrefs uses "org_keywords" not "organic_keywords"
-                organic_kw = (
-                    data.get("org_keywords")  # Primary key from Ahrefs API
-                    or data.get("organic_keywords")
-                    or data.get("organicKeywords")
-                    or data.get("keywords")
-                    or 0
-                )
+                # Use direct get() and handle None explicitly (don't use 'or' as 0 is valid)
+                organic_kw = data.get("org_keywords")
+                if organic_kw is None:
+                    organic_kw = data.get("organic_keywords")
+                if organic_kw is None:
+                    organic_kw = data.get("organicKeywords")
+                if organic_kw is None:
+                    organic_kw = data.get("keywords")
+                if organic_kw is None:
+                    organic_kw = 0
                 metrics["organic_keywords"] = _safe_int(organic_kw)
                 
                 # Organic Traffic - Ahrefs uses "org_traffic" not "organic_traffic"
-                organic_tr = (
-                    data.get("org_traffic")  # Primary key from Ahrefs API
-                    or data.get("organic_traffic")
-                    or data.get("organicTraffic")
-                    or data.get("traffic")
-                    or 0
-                )
+                organic_tr = data.get("org_traffic")
+                if organic_tr is None:
+                    organic_tr = data.get("organic_traffic")
+                if organic_tr is None:
+                    organic_tr = data.get("organicTraffic")
+                if organic_tr is None:
+                    organic_tr = data.get("traffic")
+                if organic_tr is None:
+                    organic_tr = 0
                 metrics["organic_traffic"] = _safe_int(organic_tr)
                 
                 # Referring Domains - not in metrics endpoint, need to get from backlinks-stats

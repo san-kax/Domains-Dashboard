@@ -112,19 +112,38 @@ def fetch_stats(domain: str, country: str, period: str):
     try:
         # Use the token we got from secrets/env
         client = AhrefsClient(api_key=AHREFS_TOKEN) if AHREFS_TOKEN else AhrefsClient()
+        
+        # Get raw overview data for debugging
+        overview_data = client.overview(target=domain, country=country)
+        
+        # Always show debug info when using real API (for now, to diagnose)
+        with st.expander("🔍 Debug: Raw API Responses (click to view)", expanded=False):
+            st.write("**Domain Rating Response:**")
+            if overview_data.get("_raw_dr_response"):
+                st.json(overview_data.get("_raw_dr_response"))
+            else:
+                st.write("No domain rating response stored")
+            
+            st.write("**Metrics Response:**")
+            if overview_data.get("_raw_metrics_response"):
+                st.json(overview_data.get("_raw_metrics_response"))
+            else:
+                st.write("No metrics response stored")
+            
+            st.write("**Extracted Metrics:**")
+            st.json({k: v for k, v in overview_data.items() if not k.startswith("_")})
+            
+            if overview_data.get("_errors"):
+                st.write("**Errors:**")
+                st.write(overview_data.get("_errors"))
+        
         result = get_domain_stats(domain, country, period, client)
         
-        # Debug: Check if all metrics are 0, show debug info
+        # Check if all metrics are 0
         if (hasattr(result, 'organic_keywords') and result.organic_keywords.value == 0 and
             hasattr(result, 'organic_traffic') and result.organic_traffic.value == 0 and
             hasattr(result, 'ref_domains') and result.ref_domains.value == 0):
-            # Check if we have raw response data to debug
-            overview_data = client.overview(target=domain, country=country)
-            if overview_data.get("_raw_metrics_response"):
-                with st.expander("🔍 Debug: API Response Structure (click to view)"):
-                    st.warning("⚠️ All metrics are 0. Showing raw API response to help diagnose the issue:")
-                    st.json(overview_data.get("_raw_metrics_response"))
-                    st.info("💡 Please share this JSON structure so we can update the parsing logic.")
+            st.warning("⚠️ All metrics are showing as 0. Please check the debug section above to see the raw API responses.")
         
         return result
     except RuntimeError as e:

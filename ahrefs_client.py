@@ -133,6 +133,9 @@ class AhrefsClient:
         # 1. Domain Rating (DR) - from domain-rating endpoint
         try:
             dr_response = self._get("site-explorer/domain-rating", dr_params)
+            # Store raw response for debugging
+            metrics["_raw_dr_response"] = dr_response
+            
             if isinstance(dr_response, dict):
                 # Extract DR value - try different possible keys
                 dr_value = (

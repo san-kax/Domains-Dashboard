@@ -55,20 +55,29 @@ def _extract_metrics_from_overview(payload: Dict[str, Any]) -> Dict[str, int]:
     """
     # The payload from overview() is already a flat dictionary with metrics at top level
     # Handle both nested and flat structures for robustness
-    if "metrics" in payload and isinstance(payload["metrics"], dict):
-        # If nested structure exists, use it
+    # First, check if there's a nested "metrics" key (from raw API response)
+    if "metrics" in payload and isinstance(payload["metrics"], dict) and not payload["metrics"].get("_raw"):
+        # If nested structure exists and it's not a debug key, use it
         metrics: Dict[str, Any] = payload["metrics"]
     else:
         # Otherwise, payload is already flat with metrics at top level
-        metrics = payload
+        # Filter out debug keys (starting with _)
+        metrics = {k: v for k, v in payload.items() if not k.startswith("_")}
 
     # Extract organic traffic - try multiple key variations
     # Use explicit None checks instead of 'or' to handle 0 as a valid value
+    # Check both in metrics dict and top-level payload
     organic_traffic = None
     for key in ["organic_traffic", "organicTraffic", "org_traffic"]:
         if key in metrics and metrics[key] is not None:
             organic_traffic = metrics[key]
             break
+    # If not found in metrics, check top-level payload
+    if organic_traffic is None:
+        for key in ["organic_traffic", "organicTraffic", "org_traffic"]:
+            if key in payload and payload[key] is not None:
+                organic_traffic = payload[key]
+                break
     organic_traffic = _safe_int(organic_traffic) if organic_traffic is not None else 0
     
     # Extract organic keywords - try multiple key variations
@@ -77,6 +86,12 @@ def _extract_metrics_from_overview(payload: Dict[str, Any]) -> Dict[str, int]:
         if key in metrics and metrics[key] is not None:
             organic_keywords = metrics[key]
             break
+    # If not found in metrics, check top-level payload
+    if organic_keywords is None:
+        for key in ["organic_keywords", "organicKeywords", "org_keywords"]:
+            if key in payload and payload[key] is not None:
+                organic_keywords = payload[key]
+                break
     organic_keywords = _safe_int(organic_keywords) if organic_keywords is not None else 0
     
     # Extract paid traffic

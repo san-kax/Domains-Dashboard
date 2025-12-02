@@ -213,13 +213,15 @@ for item in MONITORED_DOMAINS:
     st.markdown("---")
 
     # Header row: domain label + Authority Score
+    # Use equal column widths to ensure proper alignment
     header_cols = st.columns([3, 1])
     with header_cols[0]:
         # Display label with flag, but avoid duplication if flag is already in label
         display_label = label if flag in label else f"{label} {flag}"
         st.markdown(f"### {display_label}")
     with header_cols[1]:
-        st.metric("Authority Score", f"{stats.authority_score:.0f}")
+        # Use consistent formatting for Authority Score to align with other metrics
+        st.metric("Authority Score", f"{stats.authority_score:.0f}", delta=None)
 
     # Metrics row: Organic KW, Organic Traffic, Ref Domains
     c1, c2, c3 = st.columns([2, 2, 2])

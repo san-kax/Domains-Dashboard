@@ -98,20 +98,20 @@ class AhrefsClient:
         if not target.endswith('/'):
             target = f"{target}/"
         
-        # Note: Ahrefs API accepts domain/path format without protocol
-        # For path-specific queries (e.g., www.gambling.com/au), the API will return
-        # data specific to that path when using appropriate mode parameter
-        # If results don't match expected values, try adding protocol: https://{target}
+        # For path-specific queries, ensure we have the full domain format
+        # Ahrefs API works with domain/path format (e.g., www.gambling.com/au/)
+        # The API will return data specific to that path when using appropriate mode
         
         today = datetime.now()
         date_str = today.strftime("%Y-%m-%d")
         
         # Determine mode based on target format
-        # If target contains a path (e.g., www.gambling.com/au), use "prefix" mode
-        # If target is just a domain, use "subdomains" mode
-        # "exact" mode is for exact URL matching
+        # For path-specific queries (e.g., www.gambling.com/au), use "prefix" mode
+        # "prefix" mode includes the path and all subpaths, which matches Ahrefs dashboard behavior
+        # "exact" mode would only match the exact path, which might be too restrictive
         if "/" in target and target.count("/") > 1:  # Has path (e.g., www.gambling.com/au/)
-            mode = "prefix"  # Get data for this path and subpaths
+            # Use "prefix" mode to get data for this path and subpaths (matches Ahrefs dashboard)
+            mode = "prefix"  # Get data for path and subpaths
         else:
             mode = "subdomains"  # Get data for all subdomains
         

@@ -252,7 +252,8 @@ class AhrefsClient:
             metrics["_raw_backlinks_response"] = backlinks_response
             
             if isinstance(backlinks_response, dict):
-                # Ahrefs API structure might be: {"backlinks_stats": {...}} or {"data": {...}} or flat
+                # Ahrefs API structure might be: {"backlinks_stats": {...}} or {"data": {...}} or {"metrics": {...}} or flat
+                # First, try to get the nested structure
                 data = backlinks_response.get("backlinks_stats") or backlinks_response.get("data") or backlinks_response
                 
                 # If data is a list, get first item
@@ -263,19 +264,47 @@ class AhrefsClient:
                 if not isinstance(data, dict):
                     data = {}
                 
-                # Extract referring domains - try different possible keys
-                ref_doms = _safe_int(
-                    data.get("refdomains")
-                    or data.get("referring_domains")
-                    or data.get("referringDomains")
-                    or data.get("ref_domains")
-                    or backlinks_response.get("refdomains")  # Also check top level
-                    or backlinks_response.get("referring_domains")
-                    or 0
-                )
-                # Update ref_domains if we found a value (even if it's 0, as 0 is a valid value)
+                # Check if there's a nested "metrics" key (Ahrefs API v3 structure)
+                if "metrics" in data and isinstance(data["metrics"], dict):
+                    metrics_data = data["metrics"]
+                elif "metrics" in backlinks_response and isinstance(backlinks_response["metrics"], dict):
+                    metrics_data = backlinks_response["metrics"]
+                else:
+                    metrics_data = data
+                
+                # Extract referring domains - try multiple key variations
+                # Ahrefs API v3 uses "live_refdomains" for current referring domains
+                ref_doms = None
+                
+                # Try from metrics_data first (nested structure)
+                for key in ["live_refdomains", "refdomains", "referring_domains", "referringDomains", 
+                           "ref_domains", "all_time_refdomains"]:
+                    if key in metrics_data:
+                        ref_doms = metrics_data[key]
+                        break
+                
+                # If not found, try from data dict
+                if ref_doms is None:
+                    for key in ["live_refdomains", "refdomains", "referring_domains", "referringDomains", 
+                               "ref_domains", "all_time_refdomains"]:
+                        if key in data:
+                            ref_doms = data[key]
+                            break
+                
+                # If still not found, try from top-level backlinks_response
+                if ref_doms is None:
+                    for key in ["live_refdomains", "refdomains", "referring_domains", "referringDomains", 
+                               "ref_domains", "all_time_refdomains"]:
+                        if key in backlinks_response:
+                            ref_doms = backlinks_response[key]
+                            break
+                
+                # Update ref_domains if we found a value
                 if ref_doms is not None:
-                    metrics["ref_domains"] = ref_doms
+                    metrics["ref_domains"] = _safe_int(ref_doms)
+                elif "ref_domains" not in metrics:
+                    # Only set to 0 if it wasn't already set
+                    metrics["ref_domains"] = 0
                 
                 # Extract backlinks count if available
                 backlinks_count = _safe_int(

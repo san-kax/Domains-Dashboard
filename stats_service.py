@@ -50,38 +50,65 @@ def _extract_metrics_from_overview(payload: Dict[str, Any]) -> Dict[str, int]:
     """
     Extract metrics from Ahrefs API v3 response.
     
-    The overview() method now returns metrics directly as a dictionary,
-    so we can use them as-is.
+    The overview() method returns a flat dictionary with metrics at the top level,
+    so we extract directly from the payload.
     """
-    # The payload is already a metrics dictionary from overview()
-    # Handle both nested and flat structures
-    metrics: Dict[str, Any] = payload.get("metrics") or payload
+    # The payload from overview() is already a flat dictionary with metrics at top level
+    # Handle both nested and flat structures for robustness
+    if "metrics" in payload and isinstance(payload["metrics"], dict):
+        # If nested structure exists, use it
+        metrics: Dict[str, Any] = payload["metrics"]
+    else:
+        # Otherwise, payload is already flat with metrics at top level
+        metrics = payload
 
+    # Extract organic traffic - try multiple key variations
     organic_traffic = _safe_int(
-        metrics.get("organic_traffic") or metrics.get("organicTraffic") or 0
+        metrics.get("organic_traffic") 
+        or metrics.get("organicTraffic") 
+        or metrics.get("org_traffic")
+        or 0
     )
+    
+    # Extract organic keywords - try multiple key variations
     organic_keywords = _safe_int(
-        metrics.get("organic_keywords") or metrics.get("organicKeywords") or 0
+        metrics.get("organic_keywords") 
+        or metrics.get("organicKeywords") 
+        or metrics.get("org_keywords")
+        or 0
     )
+    
+    # Extract paid traffic
     paid_traffic = _safe_int(
-        metrics.get("paid_traffic") or metrics.get("paidTraffic") or 0
+        metrics.get("paid_traffic") 
+        or metrics.get("paidTraffic") 
+        or 0
     )
+    
+    # Extract paid keywords
     paid_keywords = _safe_int(
-        metrics.get("paid_keywords") or metrics.get("paidKeywords") or 0
+        metrics.get("paid_keywords") 
+        or metrics.get("paidKeywords") 
+        or 0
     )
 
+    # Extract referring domains - try multiple key variations
     ref_domains = _safe_int(
         metrics.get("ref_domains")
         or metrics.get("referring_domains")
         or metrics.get("referringDomains")
         or metrics.get("refdomains")
+        or metrics.get("ref_domains")
         or 0
     )
 
+    # Extract domain rating/authority score - try multiple key variations
     authority_score = _safe_int(
         metrics.get("domain_rating")
         or metrics.get("domainRating")
         or metrics.get("dr")
+        or payload.get("domain_rating")  # Also check top-level payload
+        or payload.get("dr")
         or 0
     )
 

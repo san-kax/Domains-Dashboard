@@ -130,7 +130,19 @@ def fetch_stats(domain: str, country: str, period: str):
             else:
                 st.write("No metrics response stored")
             
-            st.write("**Extracted Metrics:**")
+            st.write("**Backlinks Stats Response:**")
+            if overview_data.get("_raw_backlinks_response"):
+                st.json(overview_data.get("_raw_backlinks_response"))
+            else:
+                st.write("No backlinks stats response stored")
+            
+            st.write("**Extracted Data (from metrics endpoint):**")
+            if overview_data.get("_extracted_data"):
+                st.json(overview_data.get("_extracted_data"))
+            else:
+                st.write("No extracted data stored")
+            
+            st.write("**Final Extracted Metrics (used by dashboard):**")
             st.json({k: v for k, v in overview_data.items() if not k.startswith("_")})
             
             if overview_data.get("_errors"):

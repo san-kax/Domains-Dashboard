@@ -196,30 +196,38 @@ class AhrefsClient:
                 # Debug: Store extracted data for troubleshooting
                 metrics["_extracted_data"] = data
                 
-                # Organic Keywords - Ahrefs uses "org_keywords" not "organic_keywords"
-                # Use direct get() and handle None explicitly (don't use 'or' as 0 is valid)
-                organic_kw = data.get("org_keywords")
-                if organic_kw is None:
-                    organic_kw = data.get("organic_keywords")
-                if organic_kw is None:
-                    organic_kw = data.get("organicKeywords")
-                if organic_kw is None:
-                    organic_kw = data.get("keywords")
-                if organic_kw is None:
-                    organic_kw = 0
-                metrics["organic_keywords"] = _safe_int(organic_kw)
+                # Organic Keywords - Ahrefs API v3 uses various key names
+                # Try multiple variations to handle different response structures
+                organic_kw = None
+                for key in ["org_keywords", "organic_keywords", "organicKeywords", "keywords", 
+                           "organic_keywords_count", "org_keywords_count"]:
+                    if key in data:
+                        organic_kw = data[key]
+                        break
                 
-                # Organic Traffic - Ahrefs uses "org_traffic" not "organic_traffic"
-                organic_tr = data.get("org_traffic")
+                # If still None, check if it's nested in another structure
+                if organic_kw is None:
+                    # Sometimes the data might be in a nested structure like {"organic": {"keywords": ...}}
+                    if "organic" in data and isinstance(data["organic"], dict):
+                        organic_kw = data["organic"].get("keywords") or data["organic"].get("keywords_count")
+                
+                metrics["organic_keywords"] = _safe_int(organic_kw) if organic_kw is not None else 0
+                
+                # Organic Traffic - Ahrefs API v3 uses various key names
+                organic_tr = None
+                for key in ["org_traffic", "organic_traffic", "organicTraffic", "traffic",
+                           "organic_traffic_count", "org_traffic_count"]:
+                    if key in data:
+                        organic_tr = data[key]
+                        break
+                
+                # If still None, check if it's nested in another structure
                 if organic_tr is None:
-                    organic_tr = data.get("organic_traffic")
-                if organic_tr is None:
-                    organic_tr = data.get("organicTraffic")
-                if organic_tr is None:
-                    organic_tr = data.get("traffic")
-                if organic_tr is None:
-                    organic_tr = 0
-                metrics["organic_traffic"] = _safe_int(organic_tr)
+                    # Sometimes the data might be in a nested structure like {"organic": {"traffic": ...}}
+                    if "organic" in data and isinstance(data["organic"], dict):
+                        organic_tr = data["organic"].get("traffic") or data["organic"].get("traffic_count")
+                
+                metrics["organic_traffic"] = _safe_int(organic_tr) if organic_tr is not None else 0
                 
                 # Referring Domains - not in metrics endpoint, need to get from backlinks-stats
                 # Will be set below from backlinks-stats endpoint
@@ -239,9 +247,21 @@ class AhrefsClient:
             # Ensure country is not in params
             clean_backlinks_params = {k: v for k, v in backlinks_params.items() if k != "country"}
             backlinks_response = self._get("site-explorer/backlinks-stats", clean_backlinks_params)
+            
+            # Store raw response for debugging
+            metrics["_raw_backlinks_response"] = backlinks_response
+            
             if isinstance(backlinks_response, dict):
-                # Ahrefs API structure might be: {"backlinks_stats": {...}} or {"data": {...}}
+                # Ahrefs API structure might be: {"backlinks_stats": {...}} or {"data": {...}} or flat
                 data = backlinks_response.get("backlinks_stats") or backlinks_response.get("data") or backlinks_response
+                
+                # If data is a list, get first item
+                if isinstance(data, list) and len(data) > 0:
+                    data = data[0]
+                
+                # Ensure data is a dict
+                if not isinstance(data, dict):
+                    data = {}
                 
                 # Extract referring domains - try different possible keys
                 ref_doms = _safe_int(
@@ -249,9 +269,12 @@ class AhrefsClient:
                     or data.get("referring_domains")
                     or data.get("referringDomains")
                     or data.get("ref_domains")
+                    or backlinks_response.get("refdomains")  # Also check top level
+                    or backlinks_response.get("referring_domains")
                     or 0
                 )
-                if ref_doms > 0:
+                # Update ref_domains if we found a value (even if it's 0, as 0 is a valid value)
+                if ref_doms is not None:
                     metrics["ref_domains"] = ref_doms
                 
                 # Extract backlinks count if available
@@ -259,13 +282,18 @@ class AhrefsClient:
                     data.get("backlinks")
                     or data.get("backlinks_count")
                     or data.get("total_backlinks")
+                    or backlinks_response.get("backlinks")
                     or 0
                 )
                 if backlinks_count > 0:
                     metrics["backlinks"] = backlinks_count
         except Exception as e:
             # Backlinks stats is optional, so we don't add to errors unless it's critical
-            pass
+            # But store the error for debugging
+            errors.append(f"Backlinks Stats: {str(e)}")
+            # Don't overwrite ref_domains if it was already set from metrics endpoint
+            if "ref_domains" not in metrics:
+                metrics["ref_domains"] = 0
         
         # Set defaults for paid metrics (not needed but keeping structure)
         metrics["paid_keywords"] = 0

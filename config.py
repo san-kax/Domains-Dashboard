@@ -38,18 +38,25 @@ PERIOD_OPTIONS = ["month", "year"]
 
 # Domains to monitor - each entry should have 'domain' and 'country' keys
 # Optional: 'label' (display name) and 'flag' (emoji flag)
+# Note: Use full domain paths (e.g., www.gambling.com/au) for country-specific data
 MONITORED_DOMAINS = [
     {
-        "domain": "gambling.com",
+        "domain": "www.gambling.com/au",
         "country": "AU",
-        "label": "Gambling.com",
+        "label": "Gambling.com AU",
         "flag": "🇦🇺"
+    },
+    {
+        "domain": "www.gambling.com/ca",
+        "country": "CA",
+        "label": "Gambling.com CA",
+        "flag": "🇨🇦"
     },
     # Add more domains as needed:
     # {
-    #     "domain": "example.com",
+    #     "domain": "www.example.com/us",
     #     "country": "US",
-    #     "label": "Example Domain",
+    #     "label": "Example Domain US",
     #     "flag": "🇺🇸"
     # },
 ]

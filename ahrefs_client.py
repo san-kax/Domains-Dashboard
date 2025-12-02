@@ -92,19 +92,35 @@ class AhrefsClient:
         """
         from datetime import datetime, timedelta
         
-        # Ensure target ends with / as required by Ahrefs API
+        # Handle target format - Ahrefs API expects URLs with trailing slash
+        # If target is a path like "www.gambling.com/au", ensure it has trailing slash
+        # If target is just a domain, add trailing slash
         if not target.endswith('/'):
             target = f"{target}/"
         
+        # Note: Ahrefs API accepts domain/path format without protocol
+        # For path-specific queries (e.g., www.gambling.com/au), the API will return
+        # data specific to that path when using appropriate mode parameter
+        # If results don't match expected values, try adding protocol: https://{target}
+        
         today = datetime.now()
         date_str = today.strftime("%Y-%m-%d")
+        
+        # Determine mode based on target format
+        # If target contains a path (e.g., www.gambling.com/au), use "prefix" mode
+        # If target is just a domain, use "subdomains" mode
+        # "exact" mode is for exact URL matching
+        if "/" in target and target.count("/") > 1:  # Has path (e.g., www.gambling.com/au/)
+            mode = "prefix"  # Get data for this path and subpaths
+        else:
+            mode = "subdomains"  # Get data for all subdomains
         
         # Base parameters for metrics endpoint
         # Note: country parameter is NOT supported for metrics endpoint (causes HTTP 400)
         metrics_params: Dict[str, Any] = {
             "target": target,
             "date": date_str,
-            "mode": "subdomains",
+            "mode": mode,
             "protocol": "both",
             "volume_mode": "monthly"
         }
@@ -118,10 +134,11 @@ class AhrefsClient:
         # Note: country parameter may not be supported for domain-rating either
         
         # Base parameters for backlinks-stats endpoint
+        # Use the same mode as metrics endpoint for consistency
         backlinks_params: Dict[str, Any] = {
             "target": target,
             "date": date_str,
-            "mode": "subdomains",
+            "mode": mode,  # Use the same mode determined above
             "protocol": "both"
         }
         # Note: country parameter may not be supported for backlinks-stats either

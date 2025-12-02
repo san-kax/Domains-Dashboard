@@ -143,7 +143,16 @@ def fetch_stats(domain: str, country: str, period: str):
                 st.write("No extracted data stored")
             
             st.write("**Final Extracted Metrics (used by dashboard):**")
-            st.json({k: v for k, v in overview_data.items() if not k.startswith("_")})
+            final_metrics = {k: v for k, v in overview_data.items() if not k.startswith("_")}
+            st.json(final_metrics)
+            
+            # Show debug info for ref_domains extraction
+            if overview_data.get("_extracted_ref_domains") is not None:
+                st.write("**Referring Domains Extraction Debug:**")
+                st.write(f"- Raw value found: {overview_data.get('_extracted_ref_domains')}")
+                st.write(f"- Converted to int: {overview_data.get('_extracted_ref_domains_int')}")
+                st.write(f"- Source: {overview_data.get('_extracted_ref_domains_source')}")
+                st.write(f"- Final value in metrics: {final_metrics.get('ref_domains', 'NOT FOUND')}")
             
             if overview_data.get("_errors"):
                 st.write("**Errors:**")

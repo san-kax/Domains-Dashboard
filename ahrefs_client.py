@@ -252,70 +252,77 @@ class AhrefsClient:
             metrics["_raw_backlinks_response"] = backlinks_response
             
             if isinstance(backlinks_response, dict):
-                # Ahrefs API structure might be: {"backlinks_stats": {...}} or {"data": {...}} or {"metrics": {...}} or flat
-                # First, try to get the nested structure
-                data = backlinks_response.get("backlinks_stats") or backlinks_response.get("data") or backlinks_response
-                
-                # If data is a list, get first item
-                if isinstance(data, list) and len(data) > 0:
-                    data = data[0]
-                
-                # Ensure data is a dict
-                if not isinstance(data, dict):
-                    data = {}
-                
-                # Check if there's a nested "metrics" key (Ahrefs API v3 structure)
-                if "metrics" in data and isinstance(data["metrics"], dict):
-                    metrics_data = data["metrics"]
-                elif "metrics" in backlinks_response and isinstance(backlinks_response["metrics"], dict):
-                    metrics_data = backlinks_response["metrics"]
-                else:
-                    metrics_data = data
-                
-                # Extract referring domains - try multiple key variations
-                # Ahrefs API v3 uses "live_refdomains" for current referring domains
+                # Ahrefs API v3 response structure: {"metrics": {"live_refdomains": 32010, ...}}
+                # Extract referring domains from the response
                 ref_doms = None
                 
-                # Try from metrics_data first (nested structure)
-                for key in ["live_refdomains", "refdomains", "referring_domains", "referringDomains", 
-                           "ref_domains", "all_time_refdomains"]:
-                    if key in metrics_data:
-                        ref_doms = metrics_data[key]
-                        break
+                # Priority 1: Check if "metrics" key exists directly in response (most common)
+                # Response structure: {"metrics": {"live_refdomains": 32010, ...}}
+                if "metrics" in backlinks_response:
+                    metrics_dict = backlinks_response["metrics"]
+                    if isinstance(metrics_dict, dict):
+                        # Try "live_refdomains" first (Ahrefs API v3 format)
+                        if "live_refdomains" in metrics_dict:
+                            ref_doms = metrics_dict["live_refdomains"]
+                        # Fallback to other key names
+                        elif "refdomains" in metrics_dict:
+                            ref_doms = metrics_dict["refdomains"]
+                        elif "referring_domains" in metrics_dict:
+                            ref_doms = metrics_dict["referring_domains"]
+                        elif "ref_domains" in metrics_dict:
+                            ref_doms = metrics_dict["ref_domains"]
                 
-                # If not found, try from data dict
+                # Priority 2: Check nested structures (backlinks_stats, data)
                 if ref_doms is None:
-                    for key in ["live_refdomains", "refdomains", "referring_domains", "referringDomains", 
-                               "ref_domains", "all_time_refdomains"]:
-                        if key in data:
-                            ref_doms = data[key]
-                            break
+                    data = backlinks_response.get("backlinks_stats") or backlinks_response.get("data")
+                    if isinstance(data, dict):
+                        if "metrics" in data and isinstance(data["metrics"], dict):
+                            metrics_dict = data["metrics"]
+                            if "live_refdomains" in metrics_dict:
+                                ref_doms = metrics_dict["live_refdomains"]
+                            elif "refdomains" in metrics_dict:
+                                ref_doms = metrics_dict["refdomains"]
+                        # Check directly in data dict
+                        elif "live_refdomains" in data:
+                            ref_doms = data["live_refdomains"]
+                        elif "refdomains" in data:
+                            ref_doms = data["refdomains"]
                 
-                # If still not found, try from top-level backlinks_response
+                # Priority 3: Check top-level response (flat structure)
                 if ref_doms is None:
-                    for key in ["live_refdomains", "refdomains", "referring_domains", "referringDomains", 
-                               "ref_domains", "all_time_refdomains"]:
-                        if key in backlinks_response:
-                            ref_doms = backlinks_response[key]
-                            break
+                    if "live_refdomains" in backlinks_response:
+                        ref_doms = backlinks_response["live_refdomains"]
+                    elif "refdomains" in backlinks_response:
+                        ref_doms = backlinks_response["refdomains"]
                 
-                # Update ref_domains if we found a value
+                # Update ref_domains if we found a value (always update, even if it was set to 0 earlier)
                 if ref_doms is not None:
-                    metrics["ref_domains"] = _safe_int(ref_doms)
+                    ref_doms_int = _safe_int(ref_doms)
+                    metrics["ref_domains"] = ref_doms_int
+                    # Store for debugging
+                    metrics["_extracted_ref_domains"] = ref_doms
+                    metrics["_extracted_ref_domains_int"] = ref_doms_int
+                    metrics["_extracted_ref_domains_source"] = "backlinks-stats"
                 elif "ref_domains" not in metrics:
                     # Only set to 0 if it wasn't already set
                     metrics["ref_domains"] = 0
                 
                 # Extract backlinks count if available
-                backlinks_count = _safe_int(
-                    data.get("backlinks")
-                    or data.get("backlinks_count")
-                    or data.get("total_backlinks")
-                    or backlinks_response.get("backlinks")
-                    or 0
-                )
-                if backlinks_count > 0:
-                    metrics["backlinks"] = backlinks_count
+                backlinks_count = None
+                # Check in metrics dict first
+                if "metrics" in backlinks_response and isinstance(backlinks_response["metrics"], dict):
+                    metrics_dict = backlinks_response["metrics"]
+                    if "live" in metrics_dict:
+                        backlinks_count = metrics_dict["live"]
+                    elif "backlinks" in metrics_dict:
+                        backlinks_count = metrics_dict["backlinks"]
+                
+                # Fallback to top-level
+                if backlinks_count is None:
+                    backlinks_count = backlinks_response.get("backlinks") or backlinks_response.get("backlinks_count") or 0
+                
+                if backlinks_count and _safe_int(backlinks_count) > 0:
+                    metrics["backlinks"] = _safe_int(backlinks_count)
         except Exception as e:
             # Backlinks stats is optional, so we don't add to errors unless it's critical
             # But store the error for debugging

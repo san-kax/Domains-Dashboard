@@ -63,54 +63,65 @@ def _extract_metrics_from_overview(payload: Dict[str, Any]) -> Dict[str, int]:
         metrics = payload
 
     # Extract organic traffic - try multiple key variations
-    organic_traffic = _safe_int(
-        metrics.get("organic_traffic") 
-        or metrics.get("organicTraffic") 
-        or metrics.get("org_traffic")
-        or 0
-    )
+    # Use explicit None checks instead of 'or' to handle 0 as a valid value
+    organic_traffic = None
+    for key in ["organic_traffic", "organicTraffic", "org_traffic"]:
+        if key in metrics and metrics[key] is not None:
+            organic_traffic = metrics[key]
+            break
+    organic_traffic = _safe_int(organic_traffic) if organic_traffic is not None else 0
     
     # Extract organic keywords - try multiple key variations
-    organic_keywords = _safe_int(
-        metrics.get("organic_keywords") 
-        or metrics.get("organicKeywords") 
-        or metrics.get("org_keywords")
-        or 0
-    )
+    organic_keywords = None
+    for key in ["organic_keywords", "organicKeywords", "org_keywords"]:
+        if key in metrics and metrics[key] is not None:
+            organic_keywords = metrics[key]
+            break
+    organic_keywords = _safe_int(organic_keywords) if organic_keywords is not None else 0
     
     # Extract paid traffic
-    paid_traffic = _safe_int(
-        metrics.get("paid_traffic") 
-        or metrics.get("paidTraffic") 
-        or 0
-    )
+    paid_traffic = None
+    for key in ["paid_traffic", "paidTraffic"]:
+        if key in metrics and metrics[key] is not None:
+            paid_traffic = metrics[key]
+            break
+    paid_traffic = _safe_int(paid_traffic) if paid_traffic is not None else 0
     
     # Extract paid keywords
-    paid_keywords = _safe_int(
-        metrics.get("paid_keywords") 
-        or metrics.get("paidKeywords") 
-        or 0
-    )
+    paid_keywords = None
+    for key in ["paid_keywords", "paidKeywords"]:
+        if key in metrics and metrics[key] is not None:
+            paid_keywords = metrics[key]
+            break
+    paid_keywords = _safe_int(paid_keywords) if paid_keywords is not None else 0
 
     # Extract referring domains - try multiple key variations
-    ref_domains = _safe_int(
-        metrics.get("ref_domains")
-        or metrics.get("referring_domains")
-        or metrics.get("referringDomains")
-        or metrics.get("refdomains")
-        or metrics.get("ref_domains")
-        or 0
-    )
+    ref_domains = None
+    for key in ["ref_domains", "referring_domains", "referringDomains", "refdomains"]:
+        if key in metrics and metrics[key] is not None:
+            ref_domains = metrics[key]
+            break
+    # Also check top-level payload if not found in metrics
+    if ref_domains is None:
+        for key in ["ref_domains", "referring_domains", "referringDomains", "refdomains"]:
+            if key in payload and payload[key] is not None:
+                ref_domains = payload[key]
+                break
+    ref_domains = _safe_int(ref_domains) if ref_domains is not None else 0
 
     # Extract domain rating/authority score - try multiple key variations
-    authority_score = _safe_int(
-        metrics.get("domain_rating")
-        or metrics.get("domainRating")
-        or metrics.get("dr")
-        or payload.get("domain_rating")  # Also check top-level payload
-        or payload.get("dr")
-        or 0
-    )
+    authority_score = None
+    for key in ["domain_rating", "domainRating", "dr"]:
+        if key in metrics and metrics[key] is not None:
+            authority_score = metrics[key]
+            break
+    # Also check top-level payload if not found in metrics
+    if authority_score is None:
+        for key in ["domain_rating", "domainRating", "dr"]:
+            if key in payload and payload[key] is not None:
+                authority_score = payload[key]
+                break
+    authority_score = _safe_int(authority_score) if authority_score is not None else 0
 
     return {
         "organic_traffic": organic_traffic,
@@ -125,16 +136,28 @@ def _extract_metrics_from_overview(payload: Dict[str, Any]) -> Dict[str, int]:
 # ------------------------------------------------------------------ #
 # main function used by app.py
 # ------------------------------------------------------------------ #
-def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClient) -> DomainStats:
+def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClient, overview_data: Optional[Dict[str, Any]] = None) -> DomainStats:
     """
     Fetch and normalize metrics for a single domain+country+period combination.
 
     For now we only call Site Explorer 'overview', and we **don't** try to
     compute previous-period deltas from the API (no time-range endpoint used).
     So all *_change values are 0.0 and sparkline charts are flat.
+    
+    Args:
+        domain: Domain to analyze
+        country: Country code
+        period: Time period (month/year)
+        client: AhrefsClient instance
+        overview_data: Optional pre-fetched overview data to reuse (avoids duplicate API calls)
     """
 
-    overview_raw = client.overview(target=domain, country=country)
+    # Reuse overview_data if provided, otherwise fetch it
+    if overview_data is not None:
+        overview_raw = overview_data
+    else:
+        overview_raw = client.overview(target=domain, country=country)
+    
     metrics = _extract_metrics_from_overview(overview_raw)
 
     organic_traffic = metrics["organic_traffic"]

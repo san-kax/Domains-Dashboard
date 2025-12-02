@@ -158,12 +158,18 @@ def fetch_stats(domain: str, country: str, period: str):
                 st.write("**Errors:**")
                 st.write(overview_data.get("_errors"))
         
-        result = get_domain_stats(domain, country, period, client)
+        # Reuse the overview_data we already fetched instead of calling the API again
+        # This ensures we're using the same data that's shown in the debug section
+        result = get_domain_stats(domain, country, period, client, overview_data=overview_data)
         
-        # Check if all metrics are 0
-        if (hasattr(result, 'organic_keywords') and result.organic_keywords.value == 0 and
+        # Check if all key metrics are 0 (only show warning if truly all are zero)
+        all_zero = (
+            hasattr(result, 'organic_keywords') and result.organic_keywords.value == 0 and
             hasattr(result, 'organic_traffic') and result.organic_traffic.value == 0 and
-            hasattr(result, 'ref_domains') and result.ref_domains.value == 0):
+            hasattr(result, 'ref_domains') and result.ref_domains.value == 0
+        )
+        # Only show warning if all are zero AND authority score is also 0 (indicating no data at all)
+        if all_zero and hasattr(result, 'authority_score') and result.authority_score == 0:
             st.warning("⚠️ All metrics are showing as 0. Please check the debug section above to see the raw API responses.")
         
         return result
@@ -209,7 +215,9 @@ for item in MONITORED_DOMAINS:
     # Header row: domain label + Authority Score
     header_cols = st.columns([3, 1])
     with header_cols[0]:
-        st.markdown(f"### {label} {flag}")
+        # Display label with flag, but avoid duplication if flag is already in label
+        display_label = label if flag in label else f"{label} {flag}"
+        st.markdown(f"### {display_label}")
     with header_cols[1]:
         st.metric("Authority Score", f"{stats.authority_score:.0f}")
 

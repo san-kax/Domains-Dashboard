@@ -211,30 +211,36 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
             
             if days_back is not None:
                 # Calculate previous period date
-                # Use yesterday as the base date to match current data date
+                # For "Last month" comparison, Ahrefs uses TODAY's date as base (not yesterday)
+                # This matches the Ahrefs graph which shows Dec 4 vs Nov 4
+                # But we fetch current data for yesterday (Dec 3) to match Ahrefs data availability
                 today = datetime.now()
                 yesterday = today - timedelta(days=1)
+                
+                # For "Last month", use today's date to calculate comparison date
+                # This ensures we compare Dec 4 with Nov 4 (not Dec 3 with Nov 3)
+                base_date_for_comparison = today if changes_period == "Last month" else yesterday
                 
                 if changes_period == "Last month":
                     # For "Last month", Ahrefs compares current date with the same day of the previous month
                     # Based on Ahrefs graph: Dec 4 vs Nov 4 (same day last month)
-                    # Example: If current date is Dec 4, compare with Nov 4 (same day last month)
+                    # Use today's date as base for comparison calculation
                     import calendar
-                    if yesterday.month == 1:
+                    if base_date_for_comparison.month == 1:
                         # If current month is January, previous month is December of last year
                         prev_month = 12
-                        prev_year = yesterday.year - 1
+                        prev_year = base_date_for_comparison.year - 1
                         last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
                         # Use same day, but ensure it doesn't exceed days in previous month
-                        prev_day = min(yesterday.day, last_day_prev_month)
+                        prev_day = min(base_date_for_comparison.day, last_day_prev_month)
                         prev_date = datetime(prev_year, prev_month, prev_day)
                     else:
-                        # Use same day of previous month
-                        prev_month = yesterday.month - 1
-                        prev_year = yesterday.year
+                        # Use same day of previous month (based on today's date, not yesterday)
+                        prev_month = base_date_for_comparison.month - 1
+                        prev_year = base_date_for_comparison.year
                         last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
                         # Use same day, but ensure it doesn't exceed days in previous month
-                        prev_day = min(yesterday.day, last_day_prev_month)
+                        prev_day = min(base_date_for_comparison.day, last_day_prev_month)
                         prev_date = datetime(prev_year, prev_month, prev_day)
                 elif changes_period in ["Last 3 months", "Last 6 months"]:
                     # For multi-month periods, use approximate days (Ahrefs uses calendar months)
@@ -266,6 +272,7 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                 yesterday = today - timedelta(days=1)
                 overview_raw["_debug_info"]["current_date"] = yesterday.strftime("%Y-%m-%d")
                 overview_raw["_debug_info"]["current_metrics"] = metrics
+                overview_raw["_debug_info"]["base_date_for_comparison"] = base_date_for_comparison.strftime("%Y-%m-%d") if changes_period == "Last month" else yesterday.strftime("%Y-%m-%d")
                 
                 # Only calculate changes if we got valid previous metrics
                 if prev_metrics and isinstance(prev_metrics, dict):

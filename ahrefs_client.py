@@ -124,13 +124,13 @@ class AhrefsClient:
             date_str = yesterday.strftime("%Y-%m-%d")
         
         # Determine mode based on target format
-        # Ahrefs dashboard default: "Path" mode (includes path and subfolders)
-        # This corresponds to "path" mode in the API (not "prefix" or "exact")
-        # "path" mode matches the Ahrefs web interface "Path" dropdown option
+        # Ahrefs API v3 enum values: "exact", "prefix", "domain", "subdomains"
+        # "prefix" mode includes the path and all subfolders (matches Ahrefs "Path" dropdown)
+        # "exact" mode only matches the exact path
         if "/" in target and target.count("/") > 1:  # Has path (e.g., www.gambling.com/uk/)
-            # Use "path" mode to match Ahrefs dashboard default "Path" setting
+            # Use "prefix" mode to match Ahrefs dashboard default "Path" setting
             # This includes the path and all subfolders (matches Ahrefs web interface)
-            mode = "path"  # Get data for path and subfolders (Ahrefs default)
+            mode = "prefix"  # Get data for path and subfolders (Ahrefs default)
         else:
             mode = "subdomains"  # Get data for all subdomains
         

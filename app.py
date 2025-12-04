@@ -329,8 +329,12 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
                 st.json(overview_data.get("_api_params_backlinks"))
             
             st.write("**Date Information:**")
-            st.write(f"- Current data date: {yesterday.strftime('%Y-%m-%d')} (yesterday, to match Ahrefs web interface)")
-            st.write(f"- Note: Ahrefs data is typically 1 day behind (updated every 12 hours)")
+            # For "Last month" comparison, we use today's date to match Ahrefs (Dec 4 vs Nov 4)
+            # For other comparisons, we use yesterday for data availability
+            current_date_str = today.strftime('%Y-%m-%d') if changes_period == "Last month" else yesterday.strftime('%Y-%m-%d')
+            date_note = "today (for Last month comparison to match Ahrefs)" if changes_period == "Last month" else "yesterday (for data availability)"
+            st.write(f"- Current data date: {current_date_str} ({date_note})")
+            st.write(f"- Note: For 'Last month' comparison, we use today's date to match Ahrefs graph (Dec 4 vs Nov 4)")
             if changes_period and changes_period != "Don't show":
                 from config import CHANGES_OPTIONS
                 days_back = CHANGES_OPTIONS.get(changes_period)

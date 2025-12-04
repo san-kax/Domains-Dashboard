@@ -169,14 +169,21 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
     from datetime import datetime, timedelta
 
     # Reuse overview_data if provided, otherwise fetch it
-    # Use yesterday's date for current data to match Ahrefs web interface
+    # For "Last month" comparison, use today's date to match Ahrefs (Dec 4 vs Nov 4)
+    # For other comparisons, use yesterday's date (data availability)
+    from datetime import datetime, timedelta
+    today = datetime.now()
+    yesterday = today - timedelta(days=1)
+    
+    # Determine which date to use for current data
+    # If comparing "Last month", use today to match Ahrefs graph (Dec 4 vs Nov 4)
+    # Otherwise, use yesterday for data availability
+    current_date = today if changes_period == "Last month" else yesterday
+    
     if overview_data is not None:
         overview_raw = overview_data
     else:
-        from datetime import datetime, timedelta
-        today = datetime.now()
-        yesterday = today - timedelta(days=1)
-        overview_raw = client.overview(target=domain, country=country, date=yesterday.strftime("%Y-%m-%d"))
+        overview_raw = client.overview(target=domain, country=country, date=current_date.strftime("%Y-%m-%d"))
     
     metrics = _extract_metrics_from_overview(overview_raw)
 
@@ -267,12 +274,9 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                 overview_raw["_debug_info"]["comparison_period"] = changes_period
                 overview_raw["_debug_info"]["prev_metrics"] = prev_metrics
                 # Store current date used for comparison
-                from datetime import datetime, timedelta
-                today = datetime.now()
-                yesterday = today - timedelta(days=1)
-                overview_raw["_debug_info"]["current_date"] = yesterday.strftime("%Y-%m-%d")
+                overview_raw["_debug_info"]["current_date"] = current_date.strftime("%Y-%m-%d")
                 overview_raw["_debug_info"]["current_metrics"] = metrics
-                overview_raw["_debug_info"]["base_date_for_comparison"] = base_date_for_comparison.strftime("%Y-%m-%d") if changes_period == "Last month" else yesterday.strftime("%Y-%m-%d")
+                overview_raw["_debug_info"]["base_date_for_comparison"] = base_date_for_comparison.strftime("%Y-%m-%d") if changes_period == "Last month" else current_date.strftime("%Y-%m-%d")
                 
                 # Only calculate changes if we got valid previous metrics
                 if prev_metrics and isinstance(prev_metrics, dict):

@@ -1,5 +1,6 @@
 # ahrefs_client.py
 import os
+import time
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -47,36 +48,81 @@ class AhrefsClient:
         # v3 uses Bearer token in Authorization header
         return {"Authorization": f"Bearer {self.api_key}"}
 
-    def _get(self, path: str, params: Dict[str, Any]) -> Dict[str, Any]:
+    def _get(self, path: str, params: Dict[str, Any], max_retries: int = 2) -> Dict[str, Any]:
+        """
+        Make GET request with retry logic for transient errors (500, 502, 503, 504).
+        
+        Args:
+            path: API endpoint path
+            params: Query parameters
+            max_retries: Maximum number of retry attempts for 5xx errors (default: 2)
+        """
         url = f"{self.base_url}/{path.lstrip('/')}"
-        resp = requests.get(url, headers=self._headers(), params=params, timeout=API_TIMEOUT)
         
-        # Provide detailed error information
-        if not resp.ok:
-            error_msg = f"Ahrefs API error: HTTP {resp.status_code}"
+        # Retry logic for 5xx server errors (transient errors)
+        last_exception = None
+        for attempt in range(max_retries + 1):  # +1 for initial attempt
             try:
-                error_data = resp.json()
-                if isinstance(error_data, dict):
-                    error_detail = error_data.get("error", error_data.get("message", str(error_data)))
-                    error_msg += f" - {error_detail}"
-                else:
-                    error_msg += f" - {error_data}"
-            except Exception:
-                error_msg += f" - {resp.text[:200]}"
-            
-            # Add helpful context based on status code
-            if resp.status_code == 401:
-                error_msg += " (Invalid API token. Please check your A_HREFS_API_TOKEN in Streamlit secrets.)"
-            elif resp.status_code == 403:
-                error_msg += " (API token doesn't have permission for this endpoint or rate limit exceeded.)"
-            elif resp.status_code == 404:
-                error_msg += " (API endpoint not found. Please check the API documentation.)"
-            elif resp.status_code == 429:
-                error_msg += " (Rate limit exceeded. Please try again later.)"
-            
-            raise requests.HTTPError(error_msg, response=resp)
+                resp = requests.get(url, headers=self._headers(), params=params, timeout=API_TIMEOUT)
+                
+                # If successful, return immediately
+                if resp.ok:
+                    return resp.json()
+                
+                # Handle errors
+                error_msg = f"Ahrefs API error: HTTP {resp.status_code}"
+                try:
+                    error_data = resp.json()
+                    if isinstance(error_data, dict):
+                        error_detail = error_data.get("error", error_data.get("message", str(error_data)))
+                        error_msg += f" - {error_detail}"
+                    else:
+                        error_msg += f" - {error_data}"
+                except Exception:
+                    error_msg += f" - {resp.text[:200]}"
+                
+                # Add helpful context based on status code
+                if resp.status_code == 401:
+                    error_msg += " (Invalid API token. Please check your A_HREFS_API_TOKEN in Streamlit secrets.)"
+                elif resp.status_code == 403:
+                    error_msg += " (API token doesn't have permission for this endpoint or rate limit exceeded.)"
+                elif resp.status_code == 404:
+                    error_msg += " (API endpoint not found. Please check the API documentation.)"
+                elif resp.status_code == 429:
+                    error_msg += " (Rate limit exceeded. Please try again later.)"
+                elif resp.status_code in (500, 502, 503, 504):
+                    # Transient server errors - retry with exponential backoff
+                    if attempt < max_retries:
+                        wait_time = (2 ** attempt) * 0.5  # 0.5s, 1s, 2s
+                        time.sleep(wait_time)
+                        continue  # Retry the request
+                    else:
+                        error_msg += " (Server error - retries exhausted. This may be a temporary Ahrefs API issue.)"
+                
+                # For non-retryable errors or after max retries, raise the error
+                last_exception = requests.HTTPError(error_msg, response=resp)
+                raise last_exception
+                
+            except requests.HTTPError as e:
+                # Re-raise if it's not a retryable error or we've exhausted retries
+                if e.response and e.response.status_code in (500, 502, 503, 504) and attempt < max_retries:
+                    wait_time = (2 ** attempt) * 0.5
+                    time.sleep(wait_time)
+                    continue
+                raise
+            except Exception as e:
+                # For other exceptions (network errors, etc.), retry once
+                if attempt < max_retries:
+                    wait_time = (2 ** attempt) * 0.5
+                    time.sleep(wait_time)
+                    last_exception = e
+                    continue
+                raise
         
-        return resp.json()
+        # If we get here, all retries failed
+        if last_exception:
+            raise last_exception
+        raise requests.HTTPError("Request failed after retries", response=None)
 
     # ------------------------------------------------------------------ #
     # public methods used by stats_service

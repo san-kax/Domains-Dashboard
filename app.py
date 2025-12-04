@@ -259,6 +259,7 @@ def metric_block(title: str, metric, show_chart: bool = True, changes_period: st
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_stats(domain: str, country: str, period: str, changes_period: str = "Last month"):
+    # Include changes_period in cache key to ensure fresh data when comparison period changes
     """
     Cached wrapper for either mock stats or real Ahrefs stats.
     """
@@ -271,11 +272,13 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
         client = AhrefsClient(api_key=AHREFS_TOKEN) if AHREFS_TOKEN else AhrefsClient()
         
         # Get raw overview data for debugging
-        # Use yesterday's date to match Ahrefs web interface (data is typically 1 day behind)
+        # For "Last month" comparison, use today's date to match Ahrefs (Dec 4 vs Nov 4)
+        # For other comparisons, use yesterday's date (data availability)
         from datetime import datetime, timedelta
         today = datetime.now()
         yesterday = today - timedelta(days=1)
-        overview_data = client.overview(target=domain, country=country, date=yesterday.strftime("%Y-%m-%d"))
+        current_date = today if changes_period == "Last month" else yesterday
+        overview_data = client.overview(target=domain, country=country, date=current_date.strftime("%Y-%m-%d"))
         
         # Always show debug info when using real API (for now, to diagnose)
         with st.expander("🔍 Debug: Raw API Responses (click to view)", expanded=False):
@@ -341,19 +344,21 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
                 if days_back:
                     if changes_period == "Last month":
                         # Match stats_service.py logic: use same day of previous month
-                        # Ahrefs compares Dec 4 with Nov 4 (same day last month)
+                        # For "Last month", use today's date as base (Dec 4) to calculate Nov 4
+                        # This matches Ahrefs graph which shows Dec 4 vs Nov 4
                         import calendar
-                        if yesterday.month == 1:
+                        base_date = today if changes_period == "Last month" else yesterday
+                        if base_date.month == 1:
                             prev_month = 12
-                            prev_year = yesterday.year - 1
+                            prev_year = base_date.year - 1
                             last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
-                            prev_day = min(yesterday.day, last_day_prev_month)
+                            prev_day = min(base_date.day, last_day_prev_month)
                             prev_date = datetime(prev_year, prev_month, prev_day)
                         else:
-                            prev_month = yesterday.month - 1
-                            prev_year = yesterday.year
+                            prev_month = base_date.month - 1
+                            prev_year = base_date.year
                             last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
-                            prev_day = min(yesterday.day, last_day_prev_month)
+                            prev_day = min(base_date.day, last_day_prev_month)
                             prev_date = datetime(prev_year, prev_month, prev_day)
                     else:
                         prev_date = yesterday - timedelta(days=days_back)

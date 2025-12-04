@@ -300,6 +300,15 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
             st.write("**Extracted Data (from metrics endpoint):**")
             if overview_data.get("_extracted_data"):
                 st.json(overview_data.get("_extracted_data"))
+                # Show available keys if metrics weren't found
+                if overview_data.get("_debug_organic_kw_not_found") or overview_data.get("_debug_organic_traffic_not_found"):
+                    st.warning("⚠️ **Metrics not found in expected keys.** Available keys in extracted data:")
+                    if overview_data.get("_debug_available_keys"):
+                        st.write(overview_data.get("_debug_available_keys"))
+                    else:
+                        extracted = overview_data.get("_extracted_data", {})
+                        if isinstance(extracted, dict):
+                            st.write(list(extracted.keys()))
             else:
                 st.write("No extracted data stored")
             

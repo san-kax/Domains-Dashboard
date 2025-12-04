@@ -240,9 +240,11 @@ class AhrefsClient:
                 # Organic Keywords - Ahrefs API v3 uses various key names
                 # Try multiple variations to handle different response structures
                 organic_kw = None
+                # Check all possible key variations
                 for key in ["org_keywords", "organic_keywords", "organicKeywords", "keywords", 
-                           "organic_keywords_count", "org_keywords_count"]:
-                    if key in data:
+                           "organic_keywords_count", "org_keywords_count", "org_keywords_monthly",
+                           "organic_keywords_monthly", "keywords_count", "kw_count"]:
+                    if key in data and data[key] is not None:
                         organic_kw = data[key]
                         break
                 
@@ -250,15 +252,26 @@ class AhrefsClient:
                 if organic_kw is None:
                     # Sometimes the data might be in a nested structure like {"organic": {"keywords": ...}}
                     if "organic" in data and isinstance(data["organic"], dict):
-                        organic_kw = data["organic"].get("keywords") or data["organic"].get("keywords_count")
+                        organic_kw = data["organic"].get("keywords") or data["organic"].get("keywords_count") or data["organic"].get("org_keywords")
+                    # Also check if it's in a "search" or "seo" nested structure
+                    if organic_kw is None and "search" in data and isinstance(data["search"], dict):
+                        organic_kw = data["search"].get("keywords") or data["search"].get("organic_keywords")
+                
+                # Debug: Log what keys are available if we didn't find organic_keywords
+                if organic_kw is None:
+                    available_keys = list(data.keys()) if isinstance(data, dict) else []
+                    metrics["_debug_available_keys"] = available_keys
+                    metrics["_debug_organic_kw_not_found"] = True
                 
                 metrics["organic_keywords"] = _safe_int(organic_kw) if organic_kw is not None else 0
                 
                 # Organic Traffic - Ahrefs API v3 uses various key names
                 organic_tr = None
+                # Check all possible key variations
                 for key in ["org_traffic", "organic_traffic", "organicTraffic", "traffic",
-                           "organic_traffic_count", "org_traffic_count"]:
-                    if key in data:
+                           "organic_traffic_count", "org_traffic_count", "org_traffic_monthly",
+                           "organic_traffic_monthly", "traffic_count", "visits", "organic_visits"]:
+                    if key in data and data[key] is not None:
                         organic_tr = data[key]
                         break
                 
@@ -266,7 +279,14 @@ class AhrefsClient:
                 if organic_tr is None:
                     # Sometimes the data might be in a nested structure like {"organic": {"traffic": ...}}
                     if "organic" in data and isinstance(data["organic"], dict):
-                        organic_tr = data["organic"].get("traffic") or data["organic"].get("traffic_count")
+                        organic_tr = data["organic"].get("traffic") or data["organic"].get("traffic_count") or data["organic"].get("org_traffic")
+                    # Also check if it's in a "search" or "seo" nested structure
+                    if organic_tr is None and "search" in data and isinstance(data["search"], dict):
+                        organic_tr = data["search"].get("traffic") or data["search"].get("organic_traffic")
+                
+                # Debug: Log if we didn't find organic_traffic
+                if organic_tr is None:
+                    metrics["_debug_organic_traffic_not_found"] = True
                 
                 metrics["organic_traffic"] = _safe_int(organic_tr) if organic_tr is not None else 0
                 

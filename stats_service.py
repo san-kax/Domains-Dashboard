@@ -260,6 +260,12 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                 overview_raw["_debug_info"]["comparison_date"] = prev_date_str
                 overview_raw["_debug_info"]["comparison_period"] = changes_period
                 overview_raw["_debug_info"]["prev_metrics"] = prev_metrics
+                # Store current date used for comparison
+                from datetime import datetime, timedelta
+                today = datetime.now()
+                yesterday = today - timedelta(days=1)
+                overview_raw["_debug_info"]["current_date"] = yesterday.strftime("%Y-%m-%d")
+                overview_raw["_debug_info"]["current_metrics"] = metrics
                 
                 # Only calculate changes if we got valid previous metrics
                 if prev_metrics and isinstance(prev_metrics, dict):

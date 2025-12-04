@@ -36,6 +36,21 @@ API_TIMEOUT = int(_get_config("API_TIMEOUT", "30"))
 # Period options for the dashboard
 PERIOD_OPTIONS = ["month", "year"]
 
+# Changes timeframe options (similar to Ahrefs "Changes" dropdown)
+# Maps display name to days
+CHANGES_OPTIONS = {
+    "Don't show": None,
+    "Last 24 hours": 1,
+    "Last 7 days": 7,
+    "Last month": 30,
+    "Last 3 months": 90,
+    "Last 6 months": 180,
+    "Last year": 365,
+    "Last 2 years": 730,
+    "Last 5 years": 1825,
+}
+CHANGES_OPTIONS_LIST = list(CHANGES_OPTIONS.keys())
+
 # Domains to monitor - each entry should have 'domain' and 'country' keys
 # Optional: 'label' (display name) and 'flag' (emoji flag)
 # Note: Use full domain paths (e.g., www.gambling.com/au) for country-specific data

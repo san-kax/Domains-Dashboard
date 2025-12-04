@@ -2,13 +2,14 @@
 
 import os
 from typing import Optional
+from datetime import datetime
 
 import pandas as pd
 import requests
 import streamlit as st
 from dotenv import load_dotenv
 
-from config import MONITORED_DOMAINS, PERIOD_OPTIONS
+from config import MONITORED_DOMAINS, PERIOD_OPTIONS, CHANGES_OPTIONS, CHANGES_OPTIONS_LIST
 from mock_data import mock_domain_stats
 from ahrefs_client import AhrefsClient
 from stats_service import get_domain_stats
@@ -69,7 +70,13 @@ if not USE_MOCK_DATA and not AHREFS_TOKEN:
 st.title("Domains for monitoring")
 
 # --- Controls row --- #
-period = st.radio("Period", PERIOD_OPTIONS, horizontal=True, index=0)
+col_period, col_changes = st.columns([1, 1])
+with col_period:
+    period = st.radio("Period", PERIOD_OPTIONS, horizontal=True, index=0)
+with col_changes:
+    # Default to "Last month" (index 3)
+    changes_index = CHANGES_OPTIONS_LIST.index("Last month") if "Last month" in CHANGES_OPTIONS_LIST else 0
+    changes_period = st.selectbox("Changes", CHANGES_OPTIONS_LIST, index=changes_index)
 
 if USE_MOCK_DATA:
     st.info(
@@ -109,18 +116,136 @@ def format_change_value(change_value: Optional[float]) -> Optional[str]:
         return f"{sign}{int(change_value)}"
 
 
-def metric_block(title: str, metric, show_chart: bool = True):
+def format_date_for_tooltip(days_back: int) -> tuple:
+    """Format current and previous dates for tooltip display."""
+    from datetime import datetime, timedelta
+    
+    today = datetime.now()
+    prev_date = today - timedelta(days=days_back)
+    
+    current_str = today.strftime("%b %Y")
+    previous_str = prev_date.strftime("%b %Y")
+    
+    return current_str, previous_str
+
+
+def metric_block(title: str, metric, show_chart: bool = True, changes_period: str = "Last month"):
     """
     Render a metric (value + change in Ahrefs format + optional sparkline) in a small panel.
+    Includes hover tooltip with detailed comparison.
     """
+    from config import CHANGES_OPTIONS
+    
     col1, col2 = st.columns([1, 1])
 
     with col1:
         # Display change value in Ahrefs style (e.g., -667, +309) instead of percentage
         # Use getattr to handle cases where change_value might not exist (backward compatibility)
         change_val = getattr(metric, 'change_value', None)
+        previous_val = getattr(metric, 'previous_value', None)
+        change_pct = getattr(metric, 'change_pct', None)
         delta = format_change_value(change_val)
+        
+        # Display metric
         st.metric(title, f"{metric.value:,.0f}", delta)
+        
+        # Create tooltip if we have comparison data
+        if change_val is not None and previous_val is not None:
+            # Get dates for tooltip
+            days_back = CHANGES_OPTIONS.get(changes_period) if changes_period else None
+            if days_back:
+                current_date, previous_date = format_date_for_tooltip(days_back)
+            else:
+                current_date = datetime.now().strftime("%b %Y")
+                previous_date = "N/A"
+            
+            # Format values for tooltip
+            current_value_formatted = f"{metric.value:,.0f}"
+            if metric.value >= 1000:
+                current_value_formatted = f"{metric.value/1000:.1f}K".rstrip('0').rstrip('.')
+            
+            previous_value_formatted = f"{previous_val:,.0f}"
+            if previous_val >= 1000:
+                previous_value_formatted = f"{previous_val/1000:.1f}K".rstrip('0').rstrip('.')
+            
+            diff_formatted = format_change_value(change_val)
+            pct_formatted = f"{change_pct:+.2f}%" if change_pct is not None else "N/A"
+            
+            # Create tooltip using HTML/CSS that will attach to the delta via JavaScript
+            tooltip_content = f"""
+            <div style="padding: 10px; line-height: 1.8; font-size: 13px;">
+                <div><strong>Current ({current_date}):</strong> {current_value_formatted}</div>
+                <div><strong>Previous ({previous_date}):</strong> {previous_value_formatted}</div>
+                <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #e0e0e0;">
+                    <strong>Difference:</strong> {diff_formatted} ({pct_formatted})
+                </div>
+            </div>
+            """
+            
+            # Inject CSS and JavaScript for tooltip
+            import hashlib
+            tooltip_id = hashlib.md5(f'{title}_{metric.value}_{delta}'.encode()).hexdigest()[:8]
+            
+            st.markdown(f"""
+            <style>
+                .metric-tooltip-{tooltip_id} {{
+                    position: absolute;
+                    background-color: white;
+                    color: #333;
+                    padding: 0;
+                    border-radius: 6px;
+                    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+                    border: 1px solid #ddd;
+                    min-width: 220px;
+                    z-index: 1000;
+                    display: none;
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                }}
+                .metric-tooltip-{tooltip_id}::after {{
+                    content: "";
+                    position: absolute;
+                    top: 100%;
+                    left: 50%;
+                    margin-left: -5px;
+                    border-width: 5px;
+                    border-style: solid;
+                    border-color: white transparent transparent transparent;
+                }}
+            </style>
+            <script>
+            (function() {{
+                setTimeout(function() {{
+                    // Find all metric containers
+                    const containers = document.querySelectorAll('[data-testid="stMetric"]');
+                    containers.forEach(function(container) {{
+                        // Find delta element (usually a div with the delta value)
+                        const deltaElements = container.querySelectorAll('div');
+                        deltaElements.forEach(function(el) {{
+                            if (el.textContent && el.textContent.trim() === '{delta}') {{
+                                // Create tooltip element
+                                const tooltip = document.createElement('div');
+                                tooltip.className = 'metric-tooltip-{tooltip_id}';
+                                tooltip.innerHTML = `{tooltip_content.replace('`', '\\`')}`;
+                                document.body.appendChild(tooltip);
+                                
+                                // Add hover events
+                                el.style.cursor = 'help';
+                                el.addEventListener('mouseenter', function(e) {{
+                                    tooltip.style.display = 'block';
+                                    const rect = el.getBoundingClientRect();
+                                    tooltip.style.left = (rect.left + rect.width / 2 - 110) + 'px';
+                                    tooltip.style.top = (rect.top - tooltip.offsetHeight - 10) + 'px';
+                                }});
+                                el.addEventListener('mouseleave', function() {{
+                                    tooltip.style.display = 'none';
+                                }});
+                            }}
+                        }});
+                    }});
+                }}, 500);
+            }})();
+            </script>
+            """, unsafe_allow_html=True)
 
     if show_chart and metric.sparkline:
         with col2:
@@ -129,7 +254,7 @@ def metric_block(title: str, metric, show_chart: bool = True):
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def fetch_stats(domain: str, country: str, period: str):
+def fetch_stats(domain: str, country: str, period: str, changes_period: str = "Last month"):
     """
     Cached wrapper for either mock stats or real Ahrefs stats.
     """
@@ -188,7 +313,7 @@ def fetch_stats(domain: str, country: str, period: str):
         
         # Reuse the overview_data we already fetched instead of calling the API again
         # This ensures we're using the same data that's shown in the debug section
-        result = get_domain_stats(domain, country, period, client, overview_data=overview_data)
+        result = get_domain_stats(domain, country, period, client, overview_data=overview_data, changes_period=changes_period)
         
         # Check if all key metrics are 0 (only show warning if truly all are zero)
         all_zero = (
@@ -235,7 +360,7 @@ for item in MONITORED_DOMAINS:
     label = item.get("label", f"{domain} {country}")
     flag = item.get("flag", "")
 
-    stats = fetch_stats(domain, country, period)
+    stats = fetch_stats(domain, country, period, changes_period)
 
     # Visual separator between rows
     st.markdown("---")
@@ -255,13 +380,13 @@ for item in MONITORED_DOMAINS:
     c1, c2, c3 = st.columns([2, 2, 2])
 
     with c1:
-        metric_block("Organic Keywords", stats.organic_keywords)
+        metric_block("Organic Keywords", stats.organic_keywords, changes_period=changes_period)
 
     with c2:
-        metric_block("Organic Traffic", stats.organic_traffic)
+        metric_block("Organic Traffic", stats.organic_traffic, changes_period=changes_period)
 
     with c3:
-        metric_block("Ref. Domains", stats.ref_domains)
+        metric_block("Ref. Domains", stats.ref_domains, changes_period=changes_period)
 
 
 st.markdown("---")

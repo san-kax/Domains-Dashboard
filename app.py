@@ -371,10 +371,23 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
                         st.write("**Comparison Debug Info:**")
                         st.write(f"- Current date used: {debug_info.get('current_date', 'N/A')}")
                         st.write(f"- Comparison date: {debug_info.get('comparison_date', 'N/A')}")
+                        st.write(f"- Base date for comparison: {debug_info.get('base_date_for_comparison', 'N/A')}")
+                        
+                        # Show raw previous API response
+                        if debug_info.get("prev_overview_raw"):
+                            st.write("**Previous Period API Response (for comparison date):**")
+                            prev_raw = debug_info["prev_overview_raw"]
+                            if prev_raw.get("_raw_metrics_response"):
+                                st.write("**Previous Metrics Response:**")
+                                st.json(prev_raw.get("_raw_metrics_response"))
+                            if prev_raw.get("_api_params_metrics"):
+                                st.write("**Previous API Parameters:**")
+                                st.json(prev_raw.get("_api_params_metrics"))
+                        
                         if debug_info.get("prev_metrics"):
                             prev_metrics = debug_info["prev_metrics"]
                             current_metrics = debug_info.get("current_metrics", {})
-                            st.write("**Values:**")
+                            st.write("**Extracted Values:**")
                             st.write(f"- **Current** Organic Keywords: {current_metrics.get('organic_keywords', 'N/A')}")
                             st.write(f"- **Previous** Organic Keywords: {prev_metrics.get('organic_keywords', 'N/A')}")
                             st.write(f"- **Calculated Change**: {current_metrics.get('organic_keywords', 0) - prev_metrics.get('organic_keywords', 0)}")

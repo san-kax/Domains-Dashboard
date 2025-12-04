@@ -273,6 +273,8 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                 overview_raw["_debug_info"]["comparison_date"] = prev_date_str
                 overview_raw["_debug_info"]["comparison_period"] = changes_period
                 overview_raw["_debug_info"]["prev_metrics"] = prev_metrics
+                # Store raw previous overview for debugging
+                overview_raw["_debug_info"]["prev_overview_raw"] = prev_overview
                 # Store current date used for comparison
                 overview_raw["_debug_info"]["current_date"] = current_date.strftime("%Y-%m-%d")
                 overview_raw["_debug_info"]["current_metrics"] = metrics

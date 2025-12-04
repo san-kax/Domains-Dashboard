@@ -95,16 +95,13 @@ class AhrefsClient:
             country: Optional country code (may not be supported by all endpoints)
             date: Optional date string in YYYY-MM-DD format. If not provided, uses today's date.
         """
+        # CRITICAL: Initialize metrics dict FIRST - before ANY imports or other code
+        # This MUST be the first executable line to prevent UnboundLocalError
+        # Version: 2025-12-04-v2 - Force initialization before any other code
+        metrics = {}
+        errors = []
+        
         from datetime import datetime, timedelta
-        
-        # CRITICAL: Initialize metrics dict FIRST before ANY other code
-        # This prevents UnboundLocalError: cannot access local variable 'metrics'
-        # Version: 2025-12-04 - Fixed initialization order
-        metrics: Dict[str, Any] = {}
-        errors: List[str] = []
-        
-        # Ensure metrics is always a dict, even if something goes wrong
-        assert isinstance(metrics, dict), "metrics must be initialized as dict"
         
         # Handle target format - Ahrefs API expects URLs with trailing slash
         # If target is a path like "www.gambling.com/au", ensure it has trailing slash

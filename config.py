@@ -52,11 +52,28 @@ MONITORED_DOMAINS = [
         "label": "Gambling.com CA",
         "flag": "🇨🇦"
     },
-    # Add more domains as needed:
-    # {
-    #     "domain": "www.example.com/us",
-    #     "country": "US",
-    #     "label": "Example Domain US",
-    #     "flag": "🇺🇸"
-    # },
+    {
+        "domain": "www.gambling.com/uk",
+        "country": "UK",
+        "label": "Gambling.com UK",
+        "flag": "🇬🇧"
+    },
+    {
+        "domain": "www.gambling.com/us",
+        "country": "US",
+        "label": "Gambling.com US",
+        "flag": "🇺🇸"
+    },
+    {
+        "domain": "www.gambling.com/nz",
+        "country": "NZ",
+        "label": "Gambling.com NZ",
+        "flag": "🇳🇿"
+    },
+    {
+        "domain": "www.gambling.com/ie",
+        "country": "IE",
+        "label": "Gambling.com IE",
+        "flag": "🇮🇪"
+    },
 ]

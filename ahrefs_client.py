@@ -170,22 +170,15 @@ class AhrefsClient:
             mode = "subdomains"  # For domain-only queries, use subdomains mode
         
         # Base parameters for all endpoints
-        # country="all" to match "All Locations" in Ahrefs UI
+        # Note: Omit country parameter - Ahrefs treats empty as "all locations" (matches "All Locations" in UI)
         base_params: Dict[str, Any] = {
             "target": target,
             "mode": mode,  # "prefix" mode (matches Ahrefs UI "Path" mode)
             "date": date_str
         }
         
-        # For organic endpoints, add country="all" to match "All Locations" in Ahrefs UI
-        organic_params: Dict[str, Any] = {
-            **base_params,
-            "country": "all"  # Match "All Locations" in Ahrefs UI
-        }
-        
         # Store parameters for debugging
         metrics["_api_params_base"] = base_params
-        metrics["_api_params_organic"] = organic_params
         
         # 1. Domain Rating (DR) - from domain-rating endpoint
         try:
@@ -223,10 +216,11 @@ class AhrefsClient:
         # 2. Organic Keywords & Organic Traffic - using /v3/site-explorer/metrics
         # Ahrefs recommended endpoint for dashboards
         # Extract: metrics.org_keywords and metrics.org_traffic
+        # Note: Omit country parameter (Ahrefs treats empty as all-locations to match "All Locations" in UI)
         try:
             metrics_params = {
                 **base_params,
-                "country": "all",  # Match "All Locations" in Ahrefs UI
+                # Omit country parameter - Ahrefs treats empty as "all locations"
                 "protocol": "both",
                 "volume_mode": "monthly"  # Match "Monthly volume" in Ahrefs UI
             }

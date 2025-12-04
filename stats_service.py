@@ -216,16 +216,16 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                 yesterday = today - timedelta(days=1)
                 
                 if changes_period == "Last month":
-                    # For "Last month", Ahrefs compares same day of previous month
-                    # Example: If current date is Dec 3, compare with Nov 3 (same day last month)
+                    # For "Last month", Ahrefs compares current date with the same day of the previous month
+                    # Based on Ahrefs graph: Dec 4 vs Nov 4 (same day last month)
+                    # Example: If current date is Dec 4, compare with Nov 4 (same day last month)
                     import calendar
                     if yesterday.month == 1:
                         # If current month is January, previous month is December of last year
-                        # Use same day, but ensure it doesn't exceed days in previous month
                         prev_month = 12
                         prev_year = yesterday.year - 1
                         last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
-                        # Use same day, or last day of month if current day exceeds it
+                        # Use same day, but ensure it doesn't exceed days in previous month
                         prev_day = min(yesterday.day, last_day_prev_month)
                         prev_date = datetime(prev_year, prev_month, prev_day)
                     else:
@@ -233,7 +233,7 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                         prev_month = yesterday.month - 1
                         prev_year = yesterday.year
                         last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
-                        # Use same day, or last day of month if current day exceeds it
+                        # Use same day, but ensure it doesn't exceed days in previous month
                         prev_day = min(yesterday.day, last_day_prev_month)
                         prev_date = datetime(prev_year, prev_month, prev_day)
                 elif changes_period in ["Last 3 months", "Last 6 months"]:

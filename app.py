@@ -337,6 +337,7 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
                 if days_back:
                     if changes_period == "Last month":
                         # Match stats_service.py logic: use same day of previous month
+                        # Ahrefs compares Dec 4 with Nov 4 (same day last month)
                         import calendar
                         if yesterday.month == 1:
                             prev_month = 12
@@ -354,6 +355,18 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
                         prev_date = yesterday - timedelta(days=days_back)
                     st.write(f"- Comparison date ({changes_period}): {prev_date.strftime('%Y-%m-%d')}")
                     st.write(f"- Days difference: {(yesterday - prev_date).days} days")
+                    
+                    # Show previous period values for debugging
+                    if overview_data.get("_debug_info") and overview_data["_debug_info"].get("prev_metrics"):
+                        prev_metrics = overview_data["_debug_info"]["prev_metrics"]
+                        st.write("**Previous Period Values (for comparison):**")
+                        st.write(f"- Previous Organic Keywords: {prev_metrics.get('organic_keywords', 'N/A')}")
+                        st.write(f"- Previous Organic Traffic: {prev_metrics.get('organic_traffic', 'N/A')}")
+                        st.write(f"- Previous Ref Domains: {prev_metrics.get('ref_domains', 'N/A')}")
+                        st.write(f"- Current Organic Keywords: {final_metrics.get('organic_keywords', 'N/A')}")
+                        st.write(f"- Current Organic Traffic: {final_metrics.get('organic_traffic', 'N/A')}")
+                        st.write(f"- Current Ref Domains: {final_metrics.get('ref_domains', 'N/A')}")
+                    
                     st.write(f"- **To match Ahrefs exactly, verify these dates match what Ahrefs shows in the web interface**")
             
             # Show debug info for ref_domains extraction

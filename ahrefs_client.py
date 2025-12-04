@@ -220,9 +220,9 @@ class AhrefsClient:
             errors.append(f"Domain Rating: {str(e)}")
             metrics["domain_rating"] = 0
         
-        # 2. Main metrics endpoint - contains organic keywords and organic traffic
-        # CRITICAL: Use mode="path" (not "prefix") to match Ahrefs UI exactly
-        # Use country="all" to match "All Locations" in Ahrefs UI
+        # 2. Organic Keywords & Organic Traffic - using /v3/site-explorer/metrics
+        # Ahrefs recommended endpoint for dashboards
+        # Extract: metrics.org_keywords and metrics.org_traffic
         try:
             metrics_params = {
                 **base_params,
@@ -235,58 +235,21 @@ class AhrefsClient:
             metrics["_api_params_metrics"] = metrics_params
             
             if isinstance(metrics_response, dict):
-                # Extract metrics - Ahrefs API returns: {"metrics": {"org_keywords": ..., "org_traffic": ...}}
-                data = metrics_response.get("metrics")
-                if data is None:
-                    data = metrics_response.get("data")
-                if data is None:
-                    data = metrics_response
-                
-                # If data is a list, get first item
-                if isinstance(data, list) and len(data) > 0:
-                    data = data[0]
-                
-                # Ensure data is a dict
-                if not isinstance(data, dict):
-                    data = {}
+                # Ahrefs recommended structure: response.metrics.org_keywords and response.metrics.org_traffic
+                metrics_dict = metrics_response.get("metrics")
                 
                 # Debug: Store extracted data for troubleshooting
-                metrics["_extracted_data"] = data
+                metrics["_extracted_data"] = metrics_dict if isinstance(metrics_dict, dict) else {}
                 
-                # Organic Keywords
-                organic_kw = None
-                for key in ["org_keywords", "organic_keywords", "organicKeywords", "keywords", 
-                           "organic_keywords_count", "org_keywords_count", "org_keywords_monthly",
-                           "organic_keywords_monthly", "keywords_count", "kw_count"]:
-                    if key in data and data[key] is not None:
-                        organic_kw = data[key]
-                        break
-                
-                # Check nested structures
-                if organic_kw is None:
-                    if "organic" in data and isinstance(data["organic"], dict):
-                        organic_kw = data["organic"].get("keywords") or data["organic"].get("keywords_count")
-                    if organic_kw is None and "search" in data and isinstance(data["search"], dict):
-                        organic_kw = data["search"].get("keywords") or data["search"].get("organic_keywords")
+                # Extract org_keywords directly from metrics.org_keywords (Ahrefs recommended path)
+                if isinstance(metrics_dict, dict):
+                    organic_kw = metrics_dict.get("org_keywords")
+                    organic_tr = metrics_dict.get("org_traffic")
+                else:
+                    organic_kw = None
+                    organic_tr = None
                 
                 metrics["organic_keywords"] = _safe_int(organic_kw) if organic_kw is not None else 0
-                
-                # Organic Traffic
-                organic_tr = None
-                for key in ["org_traffic", "organic_traffic", "organicTraffic", "traffic",
-                           "organic_traffic_count", "org_traffic_count", "org_traffic_monthly",
-                           "organic_traffic_monthly", "traffic_count", "visits", "organic_visits"]:
-                    if key in data and data[key] is not None:
-                        organic_tr = data[key]
-                        break
-                
-                # Check nested structures
-                if organic_tr is None:
-                    if "organic" in data and isinstance(data["organic"], dict):
-                        organic_tr = data["organic"].get("traffic") or data["organic"].get("traffic_count")
-                    if organic_tr is None and "search" in data and isinstance(data["search"], dict):
-                        organic_tr = data["search"].get("traffic") or data["search"].get("organic_traffic")
-                
                 metrics["organic_traffic"] = _safe_int(organic_tr) if organic_tr is not None else 0
             else:
                 metrics["organic_keywords"] = 0
@@ -296,8 +259,9 @@ class AhrefsClient:
             metrics["organic_keywords"] = 0
             metrics["organic_traffic"] = 0
         
-        # 3. Backlinks Stats - for referring domains
-        # CRITICAL: Use mode="path" and ensure we get live referring domains
+        # 3. Referring Domains - using /v3/site-explorer/backlinks-stats
+        # Ahrefs recommended endpoint for dashboards
+        # Extract: metrics.live_refdomains
         try:
             backlinks_params = {
                 **base_params,
@@ -308,63 +272,26 @@ class AhrefsClient:
             metrics["_api_params_backlinks"] = backlinks_params
             
             if isinstance(backlinks_response, dict):
-                # Extract referring domains - look for live_refdomains
-                ref_doms = None
+                # Ahrefs recommended structure: response.metrics.live_refdomains
+                metrics_dict = backlinks_response.get("metrics")
                 
-                # Priority 1: Check metrics dict
-                if "metrics" in backlinks_response:
-                    metrics_dict = backlinks_response["metrics"]
-                    if isinstance(metrics_dict, dict):
-                        # Try "live_refdomains" first (Ahrefs API v3 format for live referring domains)
-                        if "live_refdomains" in metrics_dict:
-                            ref_doms = metrics_dict["live_refdomains"]
-                        elif "refdomains" in metrics_dict:
-                            ref_doms = metrics_dict["refdomains"]
-                        elif "referring_domains" in metrics_dict:
-                            ref_doms = metrics_dict["referring_domains"]
-                        elif "ref_domains" in metrics_dict:
-                            ref_doms = metrics_dict["ref_domains"]
-                
-                # Priority 2: Check nested structures
-                if ref_doms is None:
-                    data = backlinks_response.get("backlinks_stats") or backlinks_response.get("data")
-                    if isinstance(data, dict):
-                        if "metrics" in data and isinstance(data["metrics"], dict):
-                            metrics_dict = data["metrics"]
-                            if "live_refdomains" in metrics_dict:
-                                ref_doms = metrics_dict["live_refdomains"]
-                            elif "refdomains" in metrics_dict:
-                                ref_doms = metrics_dict["refdomains"]
-                        elif "live_refdomains" in data:
-                            ref_doms = data["live_refdomains"]
-                        elif "refdomains" in data:
-                            ref_doms = data["refdomains"]
-                
-                # Priority 3: Check top-level
-                if ref_doms is None:
-                    if "live_refdomains" in backlinks_response:
-                        ref_doms = backlinks_response["live_refdomains"]
-                    elif "refdomains" in backlinks_response:
-                        ref_doms = backlinks_response["refdomains"]
-                
-                if ref_doms is not None:
-                    metrics["ref_domains"] = _safe_int(ref_doms)
-                    metrics["_extracted_ref_domains"] = ref_doms
-                    metrics["_extracted_ref_domains_source"] = "backlinks-stats"
+                if isinstance(metrics_dict, dict):
+                    # Extract live_refdomains directly from metrics.live_refdomains (Ahrefs recommended path)
+                    ref_doms = metrics_dict.get("live_refdomains")
+                    
+                    if ref_doms is not None:
+                        metrics["ref_domains"] = _safe_int(ref_doms)
+                        metrics["_extracted_ref_domains"] = ref_doms
+                        metrics["_extracted_ref_domains_source"] = "backlinks-stats"
+                    else:
+                        metrics["ref_domains"] = 0
+                    
+                    # Extract backlinks count if available
+                    backlinks_count = metrics_dict.get("live") or metrics_dict.get("backlinks")
+                    if backlinks_count and _safe_int(backlinks_count) > 0:
+                        metrics["backlinks"] = _safe_int(backlinks_count)
                 else:
                     metrics["ref_domains"] = 0
-                
-                # Extract backlinks count if available
-                backlinks_count = None
-                if "metrics" in backlinks_response and isinstance(backlinks_response["metrics"], dict):
-                    metrics_dict = backlinks_response["metrics"]
-                    if "live" in metrics_dict:
-                        backlinks_count = metrics_dict["live"]
-                    elif "backlinks" in metrics_dict:
-                        backlinks_count = metrics_dict["backlinks"]
-                
-                if backlinks_count and _safe_int(backlinks_count) > 0:
-                    metrics["backlinks"] = _safe_int(backlinks_count)
             else:
                 metrics["ref_domains"] = 0
         except Exception as e:

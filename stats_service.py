@@ -169,10 +169,14 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
     from datetime import datetime, timedelta
 
     # Reuse overview_data if provided, otherwise fetch it
+    # Use yesterday's date for current data to match Ahrefs web interface
     if overview_data is not None:
         overview_raw = overview_data
     else:
-        overview_raw = client.overview(target=domain, country=country)
+        from datetime import datetime, timedelta
+        today = datetime.now()
+        yesterday = today - timedelta(days=1)
+        overview_raw = client.overview(target=domain, country=country, date=yesterday.strftime("%Y-%m-%d"))
     
     metrics = _extract_metrics_from_overview(overview_raw)
 
@@ -207,8 +211,28 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
             
             if days_back is not None:
                 # Calculate previous period date
+                # For "Last month", use calendar month (last day of previous month)
+                # This matches Ahrefs web interface behavior
                 today = datetime.now()
-                prev_date = today - timedelta(days=days_back)
+                
+                if changes_period == "Last month":
+                    # For "Last month", Ahrefs compares current month's data with previous month's data
+                    # Use the last day of the previous calendar month
+                    import calendar
+                    if today.month == 1:
+                        # If current month is January, previous month is December of last year
+                        last_day_prev_month = calendar.monthrange(today.year - 1, 12)[1]
+                        prev_date = datetime(today.year - 1, 12, last_day_prev_month)
+                    else:
+                        # Get last day of previous month
+                        last_day_prev_month = calendar.monthrange(today.year, today.month - 1)[1]
+                        prev_date = datetime(today.year, today.month - 1, last_day_prev_month)
+                elif changes_period in ["Last 3 months", "Last 6 months"]:
+                    # For multi-month periods, use approximate days (Ahrefs uses calendar months)
+                    prev_date = today - timedelta(days=days_back)
+                else:
+                    # For other periods (24 hours, 7 days, year, etc.), use exact days back
+                    prev_date = today - timedelta(days=days_back)
                 
                 # Add a small delay to avoid rate limiting when making multiple requests
                 import time

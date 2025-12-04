@@ -107,12 +107,15 @@ class AhrefsClient:
         # Ahrefs API works with domain/path format (e.g., www.gambling.com/au/)
         # The API will return data specific to that path when using appropriate mode
         
-        # Use provided date or default to today
+        # Use provided date or default to yesterday (Ahrefs typically shows data up to yesterday)
+        # This matches Ahrefs web interface behavior which shows data for the most recent available date
         if date:
             date_str = date
         else:
             today = datetime.now()
-            date_str = today.strftime("%Y-%m-%d")
+            # Use yesterday's date as Ahrefs typically shows data up to yesterday
+            yesterday = today - timedelta(days=1)
+            date_str = yesterday.strftime("%Y-%m-%d")
         
         # Determine mode based on target format
         # For path-specific queries (e.g., www.gambling.com/au), use "prefix" mode

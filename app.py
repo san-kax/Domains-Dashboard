@@ -271,7 +271,11 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
         client = AhrefsClient(api_key=AHREFS_TOKEN) if AHREFS_TOKEN else AhrefsClient()
         
         # Get raw overview data for debugging
-        overview_data = client.overview(target=domain, country=country)
+        # Use yesterday's date to match Ahrefs web interface (data is typically 1 day behind)
+        from datetime import datetime, timedelta
+        today = datetime.now()
+        yesterday = today - timedelta(days=1)
+        overview_data = client.overview(target=domain, country=country, date=yesterday.strftime("%Y-%m-%d"))
         
         # Always show debug info when using real API (for now, to diagnose)
         with st.expander("🔍 Debug: Raw API Responses (click to view)", expanded=False):
@@ -302,6 +306,29 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
             st.write("**Final Extracted Metrics (used by dashboard):**")
             final_metrics = {k: v for k, v in overview_data.items() if not k.startswith("_")}
             st.json(final_metrics)
+            
+            # Show date information for debugging
+            from datetime import datetime, timedelta
+            today = datetime.now()
+            yesterday = today - timedelta(days=1)
+            st.write("**Date Information:**")
+            st.write(f"- Current data date: {yesterday.strftime('%Y-%m-%d')} (yesterday, to match Ahrefs web interface)")
+            if changes_period and changes_period != "Don't show":
+                from config import CHANGES_OPTIONS
+                days_back = CHANGES_OPTIONS.get(changes_period)
+                if days_back:
+                    if changes_period == "Last month":
+                        import calendar
+                        if today.month == 1:
+                            last_day_prev_month = calendar.monthrange(today.year - 1, 12)[1]
+                            prev_date = datetime(today.year - 1, 12, last_day_prev_month)
+                        else:
+                            last_day_prev_month = calendar.monthrange(today.year, today.month - 1)[1]
+                            prev_date = datetime(today.year, today.month - 1, last_day_prev_month)
+                    else:
+                        prev_date = yesterday - timedelta(days=days_back)
+                    st.write(f"- Comparison date ({changes_period}): {prev_date.strftime('%Y-%m-%d')}")
+                    st.write(f"- Days difference: {(yesterday - prev_date).days} days")
             
             # Show debug info for ref_domains extraction
             if overview_data.get("_extracted_ref_domains") is not None:

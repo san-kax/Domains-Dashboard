@@ -1,6 +1,6 @@
 # ahrefs_client.py
 import os
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 import requests
 
@@ -99,8 +99,9 @@ class AhrefsClient:
         
         # Initialize metrics dict at the very beginning to avoid UnboundLocalError
         # This MUST be done before any other code that might reference metrics
-        metrics: Dict[str, Any] = {}
-        errors: List[str] = []
+        # Using explicit dict() constructor to ensure it's always initialized
+        metrics = dict()
+        errors = list()
         
         # Handle target format - Ahrefs API expects URLs with trailing slash
         # If target is a path like "www.gambling.com/au", ensure it has trailing slash

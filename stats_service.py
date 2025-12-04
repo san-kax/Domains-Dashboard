@@ -13,9 +13,9 @@ from ahrefs_client import AhrefsClient
 @dataclass
 class Metric:
     value: float
-    change_pct: Optional[float]
-    change_value: Optional[float]  # Actual numeric change (e.g., -667, +309)
-    sparkline: List[float]
+    change_pct: Optional[float] = None
+    change_value: Optional[float] = None  # Actual numeric change (e.g., -667, +309)
+    sparkline: Optional[List[float]] = None
 
 
 @dataclass

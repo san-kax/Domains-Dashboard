@@ -117,7 +117,9 @@ def metric_block(title: str, metric, show_chart: bool = True):
 
     with col1:
         # Display change value in Ahrefs style (e.g., -667, +309) instead of percentage
-        delta = format_change_value(metric.change_value)
+        # Use getattr to handle cases where change_value might not exist (backward compatibility)
+        change_val = getattr(metric, 'change_value', None)
+        delta = format_change_value(change_val)
         st.metric(title, f"{metric.value:,.0f}", delta)
 
     if show_chart and metric.sparkline:

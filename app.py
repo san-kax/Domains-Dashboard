@@ -1,6 +1,7 @@
 # app.py
 
 import os
+from typing import Optional
 
 import pandas as pd
 import requests
@@ -82,16 +83,41 @@ else:
         st.warning("⚠️ USE_MOCK_DATA=false but no API token found. Check your Streamlit secrets.")
 
 
+def format_change_value(change_value: Optional[float]) -> Optional[str]:
+    """
+    Format change value in Ahrefs style (e.g., -667, +309, -40K, +3.5K).
+    Uses K notation for thousands.
+    """
+    if change_value is None:
+        return None
+    
+    abs_change = abs(change_value)
+    sign = "+" if change_value >= 0 else ""
+    
+    # Format with K notation for values >= 1000
+    if abs_change >= 1000:
+        # Round to 1 decimal place for K notation
+        formatted = abs_change / 1000
+        # If it's a whole number, show without decimal
+        if formatted == int(formatted):
+            return f"{sign}{int(formatted)}K"
+        else:
+            # Show 1 decimal place
+            return f"{sign}{formatted:.1f}K"
+    else:
+        # For values < 1000, show as integer
+        return f"{sign}{int(change_value)}"
+
+
 def metric_block(title: str, metric, show_chart: bool = True):
     """
-    Render a metric (value + % change + optional sparkline) in a small panel.
+    Render a metric (value + change in Ahrefs format + optional sparkline) in a small panel.
     """
     col1, col2 = st.columns([1, 1])
 
     with col1:
-        delta = None
-        if metric.change_pct is not None:
-            delta = f"{metric.change_pct:+.2f}%"
+        # Display change value in Ahrefs style (e.g., -667, +309) instead of percentage
+        delta = format_change_value(metric.change_value)
         st.metric(title, f"{metric.value:,.0f}", delta)
 
     if show_chart and metric.sparkline:

@@ -81,7 +81,7 @@ class AhrefsClient:
     # ------------------------------------------------------------------ #
     # public methods used by stats_service
     # ------------------------------------------------------------------ #
-    def overview(self, target: str, country: Optional[str] = None) -> Dict[str, Any]:
+    def overview(self, target: str, country: Optional[str] = None, date: Optional[str] = None) -> Dict[str, Any]:
         """
         Fetch overview metrics using the correct Ahrefs API v3 endpoints.
         
@@ -89,6 +89,11 @@ class AhrefsClient:
         - site-explorer/domain-rating for DR
         - site-explorer/metrics for organic keywords, organic traffic, referring domains
         - site-explorer/backlinks-stats for backlinks count
+        
+        Args:
+            target: Domain or URL to analyze
+            country: Optional country code (may not be supported by all endpoints)
+            date: Optional date string in YYYY-MM-DD format. If not provided, uses today's date.
         """
         from datetime import datetime, timedelta
         
@@ -102,8 +107,12 @@ class AhrefsClient:
         # Ahrefs API works with domain/path format (e.g., www.gambling.com/au/)
         # The API will return data specific to that path when using appropriate mode
         
-        today = datetime.now()
-        date_str = today.strftime("%Y-%m-%d")
+        # Use provided date or default to today
+        if date:
+            date_str = date
+        else:
+            today = datetime.now()
+            date_str = today.strftime("%Y-%m-%d")
         
         # Determine mode based on target format
         # For path-specific queries (e.g., www.gambling.com/au), use "prefix" mode

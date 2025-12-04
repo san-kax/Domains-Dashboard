@@ -54,7 +54,7 @@ MONITORED_DOMAINS = [
     },
     {
         "domain": "www.gambling.com/uk",
-        "country": "UK",
+        "country": "GB",
         "label": "Gambling.com UK",
         "flag": "🇬🇧"
     },

@@ -14,6 +14,7 @@ from ahrefs_client import AhrefsClient
 class Metric:
     value: float
     change_pct: Optional[float]
+    change_value: Optional[float]  # Actual numeric change (e.g., -667, +309)
     sparkline: List[float]
 
 
@@ -154,10 +155,8 @@ def _extract_metrics_from_overview(payload: Dict[str, Any]) -> Dict[str, int]:
 def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClient, overview_data: Optional[Dict[str, Any]] = None) -> DomainStats:
     """
     Fetch and normalize metrics for a single domain+country+period combination.
-
-    For now we only call Site Explorer 'overview', and we **don't** try to
-    compute previous-period deltas from the API (no time-range endpoint used).
-    So all *_change values are 0.0 and sparkline charts are flat.
+    
+    Now fetches both current and previous period data to calculate changes.
     
     Args:
         domain: Domain to analyze
@@ -166,6 +165,7 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
         client: AhrefsClient instance
         overview_data: Optional pre-fetched overview data to reuse (avoids duplicate API calls)
     """
+    from datetime import datetime, timedelta
 
     # Reuse overview_data if provided, otherwise fetch it
     if overview_data is not None:
@@ -174,6 +174,53 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
         overview_raw = client.overview(target=domain, country=country)
     
     metrics = _extract_metrics_from_overview(overview_raw)
+
+    # Fetch previous period data for comparison
+    try:
+        # Calculate previous period date
+        today = datetime.now()
+        if period == "month":
+            # Get data from one month ago (approximately 30 days)
+            # For more accuracy, we could use dateutil.relativedelta, but this works for most cases
+            prev_date = today - timedelta(days=30)
+        else:  # year
+            # Get data from one year ago
+            prev_date = today - timedelta(days=365)
+        
+        # Fetch previous period data
+        prev_overview = client.overview(target=domain, country=country, date=prev_date.strftime("%Y-%m-%d"))
+        prev_metrics = _extract_metrics_from_overview(prev_overview)
+        
+        # Calculate changes
+        organic_keywords_change = metrics["organic_keywords"] - prev_metrics["organic_keywords"]
+        organic_traffic_change = metrics["organic_traffic"] - prev_metrics["organic_traffic"]
+        paid_keywords_change = metrics["paid_keywords"] - prev_metrics["paid_keywords"]
+        paid_traffic_change = metrics["paid_traffic"] - prev_metrics["paid_traffic"]
+        ref_domains_change = metrics["ref_domains"] - prev_metrics["ref_domains"]
+        
+        # Calculate percentage changes
+        def calc_pct_change(current: int, previous: int) -> float:
+            if previous == 0:
+                return 0.0 if current == 0 else 100.0
+            return ((current - previous) / previous) * 100.0
+        
+        organic_keywords_pct = calc_pct_change(metrics["organic_keywords"], prev_metrics["organic_keywords"])
+        organic_traffic_pct = calc_pct_change(metrics["organic_traffic"], prev_metrics["organic_traffic"])
+        paid_keywords_pct = calc_pct_change(metrics["paid_keywords"], prev_metrics["paid_keywords"])
+        paid_traffic_pct = calc_pct_change(metrics["paid_traffic"], prev_metrics["paid_traffic"])
+        ref_domains_pct = calc_pct_change(metrics["ref_domains"], prev_metrics["ref_domains"])
+    except Exception:
+        # If fetching previous period fails, set changes to None
+        organic_keywords_change = None
+        organic_traffic_change = None
+        paid_keywords_change = None
+        paid_traffic_change = None
+        ref_domains_change = None
+        organic_keywords_pct = None
+        organic_traffic_pct = None
+        paid_keywords_pct = None
+        paid_traffic_pct = None
+        ref_domains_pct = None
 
     organic_traffic = metrics["organic_traffic"]
     organic_keywords = metrics["organic_keywords"]
@@ -190,27 +237,32 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
         country=country,
         organic_keywords=Metric(
             value=float(organic_keywords),
-            change_pct=0.0,  # No historical data available yet
+            change_pct=organic_keywords_pct,
+            change_value=float(organic_keywords_change) if organic_keywords_change is not None else None,
             sparkline=_flat_trend(organic_keywords, trend_points),
         ),
         organic_traffic=Metric(
             value=float(organic_traffic),
-            change_pct=0.0,  # No historical data available yet
+            change_pct=organic_traffic_pct,
+            change_value=float(organic_traffic_change) if organic_traffic_change is not None else None,
             sparkline=_flat_trend(organic_traffic, trend_points),
         ),
         paid_keywords=Metric(
             value=float(paid_keywords),
-            change_pct=0.0,  # No historical data available yet
+            change_pct=paid_keywords_pct,
+            change_value=float(paid_keywords_change) if paid_keywords_change is not None else None,
             sparkline=[],
         ),
         paid_traffic=Metric(
             value=float(paid_traffic),
-            change_pct=0.0,  # No historical data available yet
+            change_pct=paid_traffic_pct,
+            change_value=float(paid_traffic_change) if paid_traffic_change is not None else None,
             sparkline=[],
         ),
         ref_domains=Metric(
             value=float(ref_domains),
-            change_pct=0.0,  # No historical data available yet
+            change_pct=ref_domains_pct,
+            change_value=float(ref_domains_change) if ref_domains_change is not None else None,
             sparkline=_flat_trend(ref_domains, trend_points),
         ),
         authority_score=float(authority_score),

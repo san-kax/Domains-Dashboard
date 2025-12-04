@@ -142,9 +142,6 @@ class AhrefsClient:
             "volume_mode": "monthly"  # Ahrefs default is "Monthly volume"
         }
         
-        # Store parameters for debugging
-        metrics["_api_params_metrics"] = metrics_params
-        
         # Base parameters for domain-rating endpoint
         dr_params: Dict[str, Any] = {
             "target": target,
@@ -161,13 +158,15 @@ class AhrefsClient:
             "mode": mode,  # Use the same mode determined above
             "protocol": "both"
         }
-        
-        # Store parameters for debugging
-        metrics["_api_params_backlinks"] = backlinks_params
         # Note: country parameter may not be supported for backlinks-stats either
         
+        # Initialize metrics dict first
         metrics = {}
         errors = []
+        
+        # Store parameters for debugging (after metrics is initialized)
+        metrics["_api_params_metrics"] = metrics_params
+        metrics["_api_params_backlinks"] = backlinks_params
         
         # 1. Domain Rating (DR) - from domain-rating endpoint
         try:

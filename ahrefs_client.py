@@ -97,6 +97,10 @@ class AhrefsClient:
         """
         from datetime import datetime, timedelta
         
+        # Initialize metrics dict at the very beginning to avoid UnboundLocalError
+        metrics = {}
+        errors = []
+        
         # Handle target format - Ahrefs API expects URLs with trailing slash
         # If target is a path like "www.gambling.com/au", ensure it has trailing slash
         # If target is just a domain, add trailing slash
@@ -160,11 +164,7 @@ class AhrefsClient:
         }
         # Note: country parameter may not be supported for backlinks-stats either
         
-        # Initialize metrics dict first
-        metrics = {}
-        errors = []
-        
-        # Store parameters for debugging (after metrics is initialized)
+        # Store parameters for debugging (metrics is already initialized at function start)
         metrics["_api_params_metrics"] = metrics_params
         metrics["_api_params_backlinks"] = backlinks_params
         

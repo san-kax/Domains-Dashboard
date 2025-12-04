@@ -98,8 +98,9 @@ class AhrefsClient:
         from datetime import datetime, timedelta
         
         # Initialize metrics dict at the very beginning to avoid UnboundLocalError
-        metrics = {}
-        errors = []
+        # This MUST be done before any other code that might reference metrics
+        metrics: Dict[str, Any] = {}
+        errors: List[str] = []
         
         # Handle target format - Ahrefs API expects URLs with trailing slash
         # If target is a path like "www.gambling.com/au", ensure it has trailing slash

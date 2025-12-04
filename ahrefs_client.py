@@ -118,24 +118,32 @@ class AhrefsClient:
             date_str = yesterday.strftime("%Y-%m-%d")
         
         # Determine mode based on target format
-        # For path-specific queries (e.g., www.gambling.com/au), use "prefix" mode
-        # "prefix" mode includes the path and all subpaths, which matches Ahrefs dashboard behavior
-        # "exact" mode would only match the exact path, which might be too restrictive
-        if "/" in target and target.count("/") > 1:  # Has path (e.g., www.gambling.com/au/)
-            # Use "prefix" mode to get data for this path and subpaths (matches Ahrefs dashboard)
-            mode = "prefix"  # Get data for path and subpaths
+        # Ahrefs dashboard default: "Path" mode (includes path and subfolders)
+        # This corresponds to "path" mode in the API (not "prefix" or "exact")
+        # "path" mode matches the Ahrefs web interface "Path" dropdown option
+        if "/" in target and target.count("/") > 1:  # Has path (e.g., www.gambling.com/uk/)
+            # Use "path" mode to match Ahrefs dashboard default "Path" setting
+            # This includes the path and all subfolders (matches Ahrefs web interface)
+            mode = "path"  # Get data for path and subfolders (Ahrefs default)
         else:
             mode = "subdomains"  # Get data for all subdomains
         
         # Base parameters for metrics endpoint
         # Note: country parameter is NOT supported for metrics endpoint (causes HTTP 400)
+        # These parameters match Ahrefs dashboard defaults:
+        # - mode: "path" (matches "Path" dropdown in Ahrefs)
+        # - protocol: "both" (matches "http + https" in Ahrefs)
+        # - volume_mode: "monthly" (matches "Monthly volume" in Ahrefs)
         metrics_params: Dict[str, Any] = {
             "target": target,
             "date": date_str,
             "mode": mode,
             "protocol": "both",
-            "volume_mode": "monthly"
+            "volume_mode": "monthly"  # Ahrefs default is "Monthly volume"
         }
+        
+        # Store parameters for debugging
+        metrics["_api_params_metrics"] = metrics_params
         
         # Base parameters for domain-rating endpoint
         dr_params: Dict[str, Any] = {
@@ -153,6 +161,9 @@ class AhrefsClient:
             "mode": mode,  # Use the same mode determined above
             "protocol": "both"
         }
+        
+        # Store parameters for debugging
+        metrics["_api_params_backlinks"] = backlinks_params
         # Note: country parameter may not be supported for backlinks-stats either
         
         metrics = {}

@@ -311,8 +311,17 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
             from datetime import datetime, timedelta
             today = datetime.now()
             yesterday = today - timedelta(days=1)
+            st.write("**API Parameters Used:**")
+            if overview_data.get("_api_params_metrics"):
+                st.write("**Metrics Endpoint Parameters:**")
+                st.json(overview_data.get("_api_params_metrics"))
+            if overview_data.get("_api_params_backlinks"):
+                st.write("**Backlinks Endpoint Parameters:**")
+                st.json(overview_data.get("_api_params_backlinks"))
+            
             st.write("**Date Information:**")
             st.write(f"- Current data date: {yesterday.strftime('%Y-%m-%d')} (yesterday, to match Ahrefs web interface)")
+            st.write(f"- Note: Ahrefs data is typically 1 day behind (updated every 12 hours)")
             if changes_period and changes_period != "Don't show":
                 from config import CHANGES_OPTIONS
                 days_back = CHANGES_OPTIONS.get(changes_period)
@@ -329,6 +338,7 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
                         prev_date = yesterday - timedelta(days=days_back)
                     st.write(f"- Comparison date ({changes_period}): {prev_date.strftime('%Y-%m-%d')}")
                     st.write(f"- Days difference: {(yesterday - prev_date).days} days")
+                    st.write(f"- **To match Ahrefs exactly, verify these dates match what Ahrefs shows in the web interface**")
             
             # Show debug info for ref_domains extraction
             if overview_data.get("_extracted_ref_domains") is not None:

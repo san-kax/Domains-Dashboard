@@ -97,9 +97,9 @@ class AhrefsClient:
         """
         # CRITICAL: Initialize metrics dict FIRST - before ANY imports or other code
         # This MUST be the first executable line to prevent UnboundLocalError
-        # Version: 2025-12-04-v2 - Force initialization before any other code
-        metrics = {}
-        errors = []
+        # Version: 2025-12-04-v4 - Force initialization as absolute first line
+        metrics: Dict[str, Any] = {}
+        errors: List[str] = []
         
         from datetime import datetime, timedelta
         
@@ -373,8 +373,20 @@ class AhrefsClient:
                 metrics["ref_domains"] = 0
         
         # Set defaults for paid metrics (not needed but keeping structure)
-        metrics["paid_keywords"] = 0
-        metrics["paid_traffic"] = 0
+        if "paid_keywords" not in metrics:
+            metrics["paid_keywords"] = 0
+        if "paid_traffic" not in metrics:
+            metrics["paid_traffic"] = 0
+        
+        # Ensure all required keys exist
+        if "domain_rating" not in metrics:
+            metrics["domain_rating"] = 0
+        if "organic_keywords" not in metrics:
+            metrics["organic_keywords"] = 0
+        if "organic_traffic" not in metrics:
+            metrics["organic_traffic"] = 0
+        if "ref_domains" not in metrics:
+            metrics["ref_domains"] = 0
         
         # Store errors in metrics for debugging (optional)
         if errors:

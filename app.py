@@ -184,7 +184,11 @@ def metric_block(title: str, metric, show_chart: bool = True, changes_period: st
             
             # Inject CSS and JavaScript for tooltip
             import hashlib
+            import json
             tooltip_id = hashlib.md5(f'{title}_{metric.value}_{delta}'.encode()).hexdigest()[:8]
+            
+            # Escape tooltip_content for JavaScript (replace backticks and escape quotes)
+            escaped_tooltip = tooltip_content.replace('`', '\\`').replace('\\', '\\\\')
             
             st.markdown(f"""
             <style>
@@ -225,7 +229,7 @@ def metric_block(title: str, metric, show_chart: bool = True, changes_period: st
                                 // Create tooltip element
                                 const tooltip = document.createElement('div');
                                 tooltip.className = 'metric-tooltip-{tooltip_id}';
-                                tooltip.innerHTML = `{tooltip_content.replace('`', '\\`')}`;
+                                tooltip.innerHTML = `{escaped_tooltip}`;
                                 document.body.appendChild(tooltip);
                                 
                                 // Add hover events

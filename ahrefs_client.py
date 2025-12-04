@@ -97,11 +97,14 @@ class AhrefsClient:
         """
         from datetime import datetime, timedelta
         
-        # Initialize metrics dict at the very beginning to avoid UnboundLocalError
-        # This MUST be done before any other code that might reference metrics
-        # Using explicit dict() constructor to ensure it's always initialized
-        metrics = dict()
-        errors = list()
+        # CRITICAL: Initialize metrics dict FIRST before ANY other code
+        # This prevents UnboundLocalError: cannot access local variable 'metrics'
+        # Version: 2025-12-04 - Fixed initialization order
+        metrics: Dict[str, Any] = {}
+        errors: List[str] = []
+        
+        # Ensure metrics is always a dict, even if something goes wrong
+        assert isinstance(metrics, dict), "metrics must be initialized as dict"
         
         # Handle target format - Ahrefs API expects URLs with trailing slash
         # If target is a path like "www.gambling.com/au", ensure it has trailing slash

@@ -160,20 +160,20 @@ class AhrefsClient:
             yesterday = today - timedelta(days=1)
             date_str = yesterday.strftime("%Y-%m-%d")
         
-        # CRITICAL: Use "path" mode (not "prefix" or "domain") to match Ahrefs UI exactly
-        # Ahrefs UI uses "Path" mode by default, which corresponds to mode="path" in API
-        # If target has a path (e.g., www.gambling.com/us), use "path" mode
-        # Otherwise, use "domain" mode
+        # CRITICAL: Use "prefix" mode to match Ahrefs UI "Path" mode
+        # Ahrefs UI shows "Path" mode, but the API enum value is "prefix" (not "path")
+        # Valid API enum values: "exact", "prefix", "domain", "subdomains"
+        # "prefix" mode includes the path and all subfolders (matches Ahrefs "Path" dropdown)
         if "/" in target and target.count("/") >= 1:  # Has path (e.g., www.gambling.com/us)
-            mode = "path"  # CRITICAL: Must be "path" to match Ahrefs UI
+            mode = "prefix"  # API enum value for Ahrefs UI "Path" mode
         else:
-            mode = "domain"  # For domain-only queries
+            mode = "subdomains"  # For domain-only queries, use subdomains mode
         
         # Base parameters for all endpoints
-        # country="all" or omit it (Ahrefs treats empty as all-locations) to match "All Locations" in UI
+        # country="all" to match "All Locations" in Ahrefs UI
         base_params: Dict[str, Any] = {
             "target": target,
-            "mode": mode,  # CRITICAL: "path" mode
+            "mode": mode,  # "prefix" mode (matches Ahrefs UI "Path" mode)
             "date": date_str
         }
         

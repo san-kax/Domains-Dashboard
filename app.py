@@ -336,13 +336,20 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
                 days_back = CHANGES_OPTIONS.get(changes_period)
                 if days_back:
                     if changes_period == "Last month":
+                        # Match stats_service.py logic: use same day of previous month
                         import calendar
-                        if today.month == 1:
-                            last_day_prev_month = calendar.monthrange(today.year - 1, 12)[1]
-                            prev_date = datetime(today.year - 1, 12, last_day_prev_month)
+                        if yesterday.month == 1:
+                            prev_month = 12
+                            prev_year = yesterday.year - 1
+                            last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
+                            prev_day = min(yesterday.day, last_day_prev_month)
+                            prev_date = datetime(prev_year, prev_month, prev_day)
                         else:
-                            last_day_prev_month = calendar.monthrange(today.year, today.month - 1)[1]
-                            prev_date = datetime(today.year, today.month - 1, last_day_prev_month)
+                            prev_month = yesterday.month - 1
+                            prev_year = yesterday.year
+                            last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
+                            prev_day = min(yesterday.day, last_day_prev_month)
+                            prev_date = datetime(prev_year, prev_month, prev_day)
                     else:
                         prev_date = yesterday - timedelta(days=days_back)
                     st.write(f"- Comparison date ({changes_period}): {prev_date.strftime('%Y-%m-%d')}")

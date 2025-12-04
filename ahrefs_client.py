@@ -224,6 +224,7 @@ class AhrefsClient:
                 "protocol": "both",
                 "volume_mode": "monthly"  # Match "Monthly volume" in Ahrefs UI
             }
+            # This matches: curl "https://api.ahrefs.com/v3/site-explorer/metrics?date=...&mode=prefix&protocol=both&target=...&volume_mode=monthly"
             metrics_response = self._get("site-explorer/metrics", metrics_params)
             metrics["_raw_metrics_response"] = metrics_response
             metrics["_api_params_metrics"] = metrics_params
@@ -261,6 +262,7 @@ class AhrefsClient:
                 **base_params,
                 "protocol": "both"
             }
+            # This matches: curl "https://api.ahrefs.com/v3/site-explorer/backlinks-stats?date=...&mode=prefix&protocol=both&target=..."
             backlinks_response = self._get("site-explorer/backlinks-stats", backlinks_params)
             metrics["_raw_backlinks_response"] = backlinks_response
             metrics["_api_params_backlinks"] = backlinks_params

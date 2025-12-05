@@ -217,14 +217,17 @@ class AhrefsClient:
         # Ahrefs recommended endpoint for dashboards
         # Extract: metrics.org_keywords and metrics.org_traffic
         # Note: Omit country parameter (Ahrefs treats empty as all-locations to match "All Locations" in UI)
+        # Note: Removed volume_mode=monthly to get daily values that match the Ahrefs graph
         try:
             metrics_params = {
                 **base_params,
                 # Omit country parameter - Ahrefs treats empty as "all locations"
-                "protocol": "both",
-                "volume_mode": "monthly"  # Match "Monthly volume" in Ahrefs UI
+                "protocol": "both"
+                # Removed volume_mode="monthly" to get daily traffic values that match the graph
+                # The graph shows daily values, not monthly aggregates
             }
-            # This matches: curl "https://api.ahrefs.com/v3/site-explorer/metrics?date=...&mode=prefix&protocol=both&target=...&volume_mode=monthly"
+            # This matches: curl "https://api.ahrefs.com/v3/site-explorer/metrics?date=...&mode=prefix&protocol=both&target=..."
+            # Note: volume_mode parameter removed to get daily values that match the Ahrefs graph (not monthly aggregates)
             metrics_response = self._get("site-explorer/metrics", metrics_params)
             metrics["_raw_metrics_response"] = metrics_response
             metrics["_api_params_metrics"] = metrics_params
@@ -235,6 +238,12 @@ class AhrefsClient:
                 
                 # Debug: Store extracted data for troubleshooting
                 metrics["_extracted_data"] = metrics_dict if isinstance(metrics_dict, dict) else {}
+                
+                # Check if API returned a different date than requested (Ahrefs may return closest available date)
+                if "date" in metrics_response:
+                    metrics["_api_returned_date"] = metrics_response.get("date")
+                elif isinstance(metrics_dict, dict) and "date" in metrics_dict:
+                    metrics["_api_returned_date"] = metrics_dict.get("date")
                 
                 # Extract org_keywords directly from metrics.org_keywords (Ahrefs recommended path)
                 if isinstance(metrics_dict, dict):

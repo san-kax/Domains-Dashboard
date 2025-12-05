@@ -275,10 +275,16 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                 overview_raw["_debug_info"]["prev_metrics"] = prev_metrics
                 # Store raw previous overview for debugging
                 overview_raw["_debug_info"]["prev_overview_raw"] = prev_overview
+                # Check what date the API actually returned for previous period
+                prev_returned_date = prev_overview.get("_api_returned_date") or prev_overview.get("_api_params_metrics", {}).get("date")
+                overview_raw["_debug_info"]["prev_api_returned_date"] = prev_returned_date
                 # Store current date used for comparison
                 overview_raw["_debug_info"]["current_date"] = current_date.strftime("%Y-%m-%d")
                 overview_raw["_debug_info"]["current_metrics"] = metrics
                 overview_raw["_debug_info"]["base_date_for_comparison"] = base_date_for_comparison.strftime("%Y-%m-%d") if changes_period == "Last month" else current_date.strftime("%Y-%m-%d")
+                # Check what date the API actually returned for current period
+                current_returned_date = overview_raw.get("_api_returned_date") or overview_raw.get("_api_params_metrics", {}).get("date")
+                overview_raw["_debug_info"]["current_api_returned_date"] = current_returned_date
                 
                 # Only calculate changes if we got valid previous metrics
                 if prev_metrics and isinstance(prev_metrics, dict):

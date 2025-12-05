@@ -369,8 +369,10 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
                     if overview_data.get("_debug_info"):
                         debug_info = overview_data["_debug_info"]
                         st.write("**Comparison Debug Info:**")
-                        st.write(f"- Current date used: {debug_info.get('current_date', 'N/A')}")
-                        st.write(f"- Comparison date: {debug_info.get('comparison_date', 'N/A')}")
+                        st.write(f"- Current date requested: {debug_info.get('current_date', 'N/A')}")
+                        st.write(f"- Current date API returned: {debug_info.get('current_api_returned_date', 'N/A')} (⚠️ Check if different from requested)")
+                        st.write(f"- Comparison date requested: {debug_info.get('comparison_date', 'N/A')}")
+                        st.write(f"- Comparison date API returned: {debug_info.get('prev_api_returned_date', 'N/A')} (⚠️ Check if different from requested)")
                         st.write(f"- Base date for comparison: {debug_info.get('base_date_for_comparison', 'N/A')}")
                         
                         # Show raw previous API response

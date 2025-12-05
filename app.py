@@ -86,6 +86,12 @@ if USE_MOCK_DATA:
 else:
     if AHREFS_TOKEN:
         st.success("✅ Using real Ahrefs API data")
+        # Add prominent warning about org_traffic being monthly estimates
+        st.warning(
+            "⚠️ **IMPORTANT:** The 'Organic Traffic' metric uses `org_traffic` from the API, which is a **monthly search volume ESTIMATE**, "
+            "NOT the daily actual traffic shown in Ahrefs graphs. The graph shows daily actual visits, while the API shows monthly estimates. "
+            "This is why comparisons may not match the graph exactly. See debug section for details."
+        )
     else:
         st.warning("⚠️ USE_MOCK_DATA=false but no API token found. Check your Streamlit secrets.")
 
@@ -349,26 +355,31 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
             current_date_str = today.strftime('%Y-%m-%d') if changes_period == "Last month" else yesterday.strftime('%Y-%m-%d')
             date_note = "today (for Last month comparison to match Ahrefs)" if changes_period == "Last month" else "yesterday (for data availability)"
             st.write(f"- Current data date: {current_date_str} ({date_note})")
-            st.write(f"- Note: For 'Last month' comparison with monthly estimates, we use the LAST DAY of the previous month (not same day) to compare full months")
+            st.write(f"- Note: For 'Last month' comparison, we compare same day of previous month (e.g., Dec 5 vs Nov 5)")
+            st.warning("⚠️ **IMPORTANT:** The API's `org_traffic` is a monthly search volume ESTIMATE, not daily actual traffic. "
+                      "The Ahrefs graph shows daily actual traffic, which is a different metric. "
+                      "This is why the comparison may not match the graph exactly.")
             if changes_period and changes_period != "Don't show":
                 from config import CHANGES_OPTIONS
                 days_back = CHANGES_OPTIONS.get(changes_period)
                 if days_back:
                     if changes_period == "Last month":
-                        # Match stats_service.py logic: use LAST DAY of previous month for monthly estimates
-                        # Since org_traffic is a monthly estimate, we compare full months (last day of prev month)
-                        # instead of partial months (same day), which gives more accurate comparisons
+                        # Match stats_service.py logic: use same day of previous month
+                        # This matches how Ahrefs UI typically handles "Last month" comparisons
                         import calendar
                         base_date = today if changes_period == "Last month" else yesterday
                         if base_date.month == 1:
                             prev_month = 12
                             prev_year = base_date.year - 1
+                            last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
+                            prev_day = min(base_date.day, last_day_prev_month)
+                            prev_date = datetime(prev_year, prev_month, prev_day)
                         else:
                             prev_month = base_date.month - 1
                             prev_year = base_date.year
-                        # Use the last day of the previous month to get the full month's estimate
-                        last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
-                        prev_date = datetime(prev_year, prev_month, last_day_prev_month)
+                            last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
+                            prev_day = min(base_date.day, last_day_prev_month)
+                            prev_date = datetime(prev_year, prev_month, prev_day)
                     else:
                         prev_date = yesterday - timedelta(days=days_back)
                     st.write(f"- Comparison date ({changes_period}): {prev_date.strftime('%Y-%m-%d')}")

@@ -314,15 +314,26 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
             st.write(f"**Current Traffic Value (monthly estimate):** {current_traffic:,}")
             
             # Try to get previous period value from debug info
-            if overview_data.get("_debug_info", {}).get("prev_metrics"):
-                prev_traffic = overview_data["_debug_info"]["prev_metrics"].get("organic_traffic", "N/A")
-                if prev_traffic != "N/A":
-                    st.write(f"**Previous Traffic Value (monthly estimate):** {prev_traffic:,}")
+            debug_info = overview_data.get("_debug_info", {})
+            prev_metrics = debug_info.get("prev_metrics", {})
+            
+            if prev_metrics and isinstance(prev_metrics, dict):
+                prev_traffic = prev_metrics.get("organic_traffic")
+                if prev_traffic is not None:
+                    st.write(f"**Previous Traffic Value (monthly estimate, {debug_info.get('comparison_date', 'N/A')}):** {prev_traffic:,}")
                     change = current_traffic - prev_traffic
-                    st.write(f"**Calculated Change:** {change:+,}")
-                    st.warning(f"⚠️ **This comparison uses monthly estimates, not daily actual traffic. "
-                              f"The graph shows daily traffic which declined from ~130K-140K to ~82K, "
-                              f"but the API estimates show different values because they're different metrics.**")
+                    change_pct = ((change / prev_traffic) * 100) if prev_traffic > 0 else 0
+                    st.write(f"**Calculated Change:** {change:+,} ({change_pct:+.1f}%)")
+                    st.error(f"❌ **DISCREPANCY EXPLAINED:** The API shows an increase of {change:+,} because it's comparing monthly estimates: "
+                            f"Nov 5 estimate ({prev_traffic:,}) vs Dec 5 estimate ({current_traffic:,}). "
+                            f"However, the Ahrefs graph shows daily actual traffic declining from ~130K-140K (early Nov) to ~82K (Dec 5). "
+                            f"These are fundamentally different metrics - monthly estimates vs daily actual traffic.")
+                else:
+                    st.warning("⚠️ Previous traffic value not found in prev_metrics")
+            else:
+                st.warning("⚠️ Previous period data not available. The comparison may not be calculated correctly.")
+                if debug_info.get("comparison_date"):
+                    st.write(f"**Note:** Comparison date was set to {debug_info.get('comparison_date')}, but previous metrics were not retrieved.")
             
             st.write(f"**Traffic Source:** {overview_data.get('_traffic_source', 'metrics_endpoint')}")
             st.write("**Traffic comes from Keywords Response (see above) - org_traffic is included in the metrics object**")

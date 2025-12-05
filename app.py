@@ -294,19 +294,17 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
             else:
                 st.write("No keywords response stored")
             
-            st.write("**Traffic Response:**")
-            if overview_data.get("_raw_traffic_response"):
-                st.json(overview_data.get("_raw_traffic_response"))
-            else:
-                st.warning("⚠️ Traffic-overview endpoint not available, using fallback from metrics endpoint")
-                if overview_data.get("_traffic_overview_error"):
-                    st.write(f"**Error:** {overview_data.get('_traffic_overview_error')}")
-                if overview_data.get("_raw_metrics_response_traffic_fallback"):
-                    st.json(overview_data.get("_raw_metrics_response_traffic_fallback"))
-                elif overview_data.get("_raw_metrics_response"):
-                    st.json(overview_data.get("_raw_metrics_response"))
-                if overview_data.get("_traffic_is_monthly_estimate"):
-                    st.error("❌ **WARNING:** Using monthly search volume estimates, not daily traffic! This may cause incorrect comparisons.")
+            st.write("**Traffic Data:**")
+            if overview_data.get("_traffic_is_monthly_estimate"):
+                st.error("❌ **CRITICAL:** The API's `org_traffic` is a MONTHLY search volume ESTIMATE, NOT daily actual traffic!")
+                st.info("📊 **Explanation:** The Ahrefs graph shows daily actual organic traffic (sum of daily visits). "
+                       "The API's `org_traffic` is a monthly estimate based on search volume × ranking positions. "
+                       "These are different metrics, which is why the comparison doesn't match the graph.")
+                if overview_data.get("_traffic_note"):
+                    st.write(f"**Note:** {overview_data.get('_traffic_note')}")
+            st.write(f"**Traffic Source:** {overview_data.get('_traffic_source', 'metrics_endpoint')}")
+            st.write(f"**Traffic Value:** {overview_data.get('organic_traffic', 'N/A'):,}")
+            st.write("**Traffic comes from Keywords Response (see above) - org_traffic is included in the metrics object**")
             
             st.write("**Backlinks Stats Response:**")
             if overview_data.get("_raw_backlinks_response"):

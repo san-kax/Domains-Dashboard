@@ -277,9 +277,24 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                 # Store comparison date for debugging
                 prev_date_str = prev_date.strftime("%Y-%m-%d")
                 
+                # Store that we're about to fetch previous period data
+                if "_debug_info" not in overview_raw:
+                    overview_raw["_debug_info"] = {}
+                overview_raw["_debug_info"]["prev_period_fetch_attempted"] = True
+                overview_raw["_debug_info"]["prev_period_fetch_date"] = prev_date_str
+                
                 # Fetch previous period data
-                prev_overview = client.overview(target=domain, country=country, date=prev_date_str)
-                prev_metrics = _extract_metrics_from_overview(prev_overview)
+                try:
+                    prev_overview = client.overview(target=domain, country=country, date=prev_date_str)
+                    prev_metrics = _extract_metrics_from_overview(prev_overview)
+                    overview_raw["_debug_info"]["prev_period_fetch_success"] = True
+                except Exception as fetch_error:
+                    # Store the fetch error separately from the outer exception handler
+                    overview_raw["_debug_info"]["prev_period_fetch_error"] = str(fetch_error)
+                    overview_raw["_debug_info"]["prev_period_fetch_error_type"] = type(fetch_error).__name__
+                    overview_raw["_debug_info"]["prev_period_fetch_success"] = False
+                    # Re-raise to be caught by outer exception handler
+                    raise
                 
                 # Store debug info about comparison
                 if "_debug_info" not in overview_raw:
@@ -329,10 +344,13 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                     ref_domains_pct = calc_pct_change(metrics["ref_domains"], prev_metrics.get("ref_domains", 0))
         except Exception as e:
             # If fetching previous period fails, changes remain None
-            # This is expected if historical data is not available for the domain/date
+            # Store the error for debugging
+            if "_debug_info" not in overview_raw:
+                overview_raw["_debug_info"] = {}
+            overview_raw["_debug_info"]["prev_period_fetch_error"] = str(e)
+            overview_raw["_debug_info"]["prev_period_fetch_error_type"] = type(e).__name__
             # Common reasons: API rate limits, historical data not available, API errors
-            # Silently continue - changes will be None and won't be displayed
-            pass
+            # Continue - changes will be None and won't be displayed, but error is logged for debugging
 
     organic_traffic = metrics["organic_traffic"]
     organic_keywords = metrics["organic_keywords"]

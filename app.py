@@ -334,6 +334,12 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
                 st.warning("⚠️ Previous period data not available. The comparison may not be calculated correctly.")
                 if debug_info.get("comparison_date"):
                     st.write(f"**Note:** Comparison date was set to {debug_info.get('comparison_date')}, but previous metrics were not retrieved.")
+                
+                # Show error if previous period fetch failed
+                if debug_info.get("prev_period_fetch_error"):
+                    st.error(f"❌ **Error fetching previous period data:** {debug_info.get('prev_period_fetch_error')}")
+                    st.write(f"**Error Type:** {debug_info.get('prev_period_fetch_error_type', 'Unknown')}")
+                    st.info("💡 **Possible causes:** API rate limit, historical data not available, network error, or API endpoint issue.")
             
             st.write(f"**Traffic Source:** {overview_data.get('_traffic_source', 'metrics_endpoint')}")
             st.write("**Traffic comes from Keywords Response (see above) - org_traffic is included in the metrics object**")

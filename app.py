@@ -308,8 +308,23 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
                        "These are different metrics, which is why the comparison doesn't match the graph.")
                 if overview_data.get("_traffic_note"):
                     st.write(f"**Note:** {overview_data.get('_traffic_note')}")
+            
+            # Show current and previous traffic values for comparison
+            current_traffic = overview_data.get('organic_traffic', 0)
+            st.write(f"**Current Traffic Value (monthly estimate):** {current_traffic:,}")
+            
+            # Try to get previous period value from debug info
+            if overview_data.get("_debug_info", {}).get("prev_metrics"):
+                prev_traffic = overview_data["_debug_info"]["prev_metrics"].get("organic_traffic", "N/A")
+                if prev_traffic != "N/A":
+                    st.write(f"**Previous Traffic Value (monthly estimate):** {prev_traffic:,}")
+                    change = current_traffic - prev_traffic
+                    st.write(f"**Calculated Change:** {change:+,}")
+                    st.warning(f"⚠️ **This comparison uses monthly estimates, not daily actual traffic. "
+                              f"The graph shows daily traffic which declined from ~130K-140K to ~82K, "
+                              f"but the API estimates show different values because they're different metrics.**")
+            
             st.write(f"**Traffic Source:** {overview_data.get('_traffic_source', 'metrics_endpoint')}")
-            st.write(f"**Traffic Value:** {overview_data.get('organic_traffic', 'N/A'):,}")
             st.write("**Traffic comes from Keywords Response (see above) - org_traffic is included in the metrics object**")
             
             st.write("**Backlinks Stats Response:**")

@@ -1,9 +1,10 @@
 # mock_data.py
+# Import moved inside function to avoid circular import with stats_service
 
-from stats_service import DomainStats, Metric
 
-
-def mock_domain_stats(domain: str, country: str, period: str) -> DomainStats:
+def mock_domain_stats(domain: str, country: str, period: str):
+    # Import here to avoid circular import
+    from stats_service import DomainStats, Metric
     """
     Return static but realistic-looking data so the dashboard
     renders even without Ahrefs API access.

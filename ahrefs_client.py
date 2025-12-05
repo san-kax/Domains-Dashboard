@@ -213,57 +213,112 @@ class AhrefsClient:
             errors.append(f"Domain Rating: {str(e)}")
             metrics["domain_rating"] = 0
         
-        # 2. Organic Keywords & Organic Traffic - using /v3/site-explorer/metrics
+        # 2. Organic Keywords - using /v3/site-explorer/metrics
         # Ahrefs recommended endpoint for dashboards
-        # Extract: metrics.org_keywords and metrics.org_traffic
+        # Extract: metrics.org_keywords
         # Note: Omit country parameter (Ahrefs treats empty as all-locations to match "All Locations" in UI)
-        # Note: Removed volume_mode=monthly to get daily values that match the Ahrefs graph
         try:
-            metrics_params = {
+            keywords_params = {
                 **base_params,
                 # Omit country parameter - Ahrefs treats empty as "all locations"
                 "protocol": "both"
-                # Removed volume_mode="monthly" to get daily traffic values that match the graph
-                # The graph shows daily values, not monthly aggregates
             }
-            # This matches: curl "https://api.ahrefs.com/v3/site-explorer/metrics?date=...&mode=prefix&protocol=both&target=..."
-            # Note: volume_mode parameter removed to get daily values that match the Ahrefs graph (not monthly aggregates)
-            metrics_response = self._get("site-explorer/metrics", metrics_params)
-            metrics["_raw_metrics_response"] = metrics_response
-            metrics["_api_params_metrics"] = metrics_params
+            keywords_response = self._get("site-explorer/metrics", keywords_params)
+            metrics["_raw_keywords_response"] = keywords_response
+            metrics["_api_params_keywords"] = keywords_params
             
-            if isinstance(metrics_response, dict):
-                # Ahrefs recommended structure: response.metrics.org_keywords and response.metrics.org_traffic
-                metrics_dict = metrics_response.get("metrics")
+            if isinstance(keywords_response, dict):
+                keywords_dict = keywords_response.get("metrics")
+                metrics["_extracted_keywords_data"] = keywords_dict if isinstance(keywords_dict, dict) else {}
                 
-                # Debug: Store extracted data for troubleshooting
-                metrics["_extracted_data"] = metrics_dict if isinstance(metrics_dict, dict) else {}
+                # Check if API returned a different date than requested
+                if "date" in keywords_response:
+                    metrics["_api_returned_date"] = keywords_response.get("date")
+                elif isinstance(keywords_dict, dict) and "date" in keywords_dict:
+                    metrics["_api_returned_date"] = keywords_dict.get("date")
                 
-                # Check if API returned a different date than requested (Ahrefs may return closest available date)
-                if "date" in metrics_response:
-                    metrics["_api_returned_date"] = metrics_response.get("date")
-                elif isinstance(metrics_dict, dict) and "date" in metrics_dict:
-                    metrics["_api_returned_date"] = metrics_dict.get("date")
-                
-                # Extract org_keywords directly from metrics.org_keywords (Ahrefs recommended path)
-                if isinstance(metrics_dict, dict):
-                    organic_kw = metrics_dict.get("org_keywords")
-                    organic_tr = metrics_dict.get("org_traffic")
+                # Extract org_keywords
+                if isinstance(keywords_dict, dict):
+                    organic_kw = keywords_dict.get("org_keywords")
                 else:
                     organic_kw = None
-                    organic_tr = None
                 
                 metrics["organic_keywords"] = _safe_int(organic_kw) if organic_kw is not None else 0
-                metrics["organic_traffic"] = _safe_int(organic_tr) if organic_tr is not None else 0
             else:
                 metrics["organic_keywords"] = 0
+        except Exception as e:
+            errors.append(f"Keywords endpoint: {str(e)}")
+            metrics["organic_keywords"] = 0
+        
+        # 3. Organic Traffic - using /v3/site-explorer/organic/traffic-overview
+        # This endpoint returns actual daily organic traffic that matches the Ahrefs graph
+        # The metrics endpoint returns monthly search volume estimates, not actual daily traffic
+        try:
+            traffic_params = {
+                **base_params,
+                "protocol": "both"
+            }
+            traffic_response = self._get("site-explorer/organic/traffic-overview", traffic_params)
+            metrics["_raw_traffic_response"] = traffic_response
+            metrics["_api_params_traffic"] = traffic_params
+            
+            if isinstance(traffic_response, dict):
+                # The traffic-overview endpoint structure may vary
+                # Try multiple possible paths for the traffic value
+                traffic_dict = traffic_response.get("metrics") or traffic_response.get("traffic") or traffic_response
+                
+                metrics["_extracted_traffic_data"] = traffic_dict if isinstance(traffic_dict, dict) else {}
+                
+                # Extract organic traffic - try multiple key variations
+                organic_tr = None
+                if isinstance(traffic_dict, dict):
+                    # Try common key names for traffic
+                    for key in ["org_traffic", "organic_traffic", "traffic", "value", "total"]:
+                        if key in traffic_dict and traffic_dict[key] is not None:
+                            organic_tr = traffic_dict[key]
+                            break
+                
+                # If not found in nested dict, check top level
+                if organic_tr is None:
+                    for key in ["org_traffic", "organic_traffic", "traffic", "value", "total"]:
+                        if key in traffic_response and traffic_response[key] is not None:
+                            organic_tr = traffic_response[key]
+                            break
+                
+                metrics["organic_traffic"] = _safe_int(organic_tr) if organic_tr is not None else 0
+            else:
                 metrics["organic_traffic"] = 0
         except Exception as e:
-            errors.append(f"Metrics endpoint: {str(e)}")
-            metrics["organic_keywords"] = 0
-            metrics["organic_traffic"] = 0
+            error_msg = str(e)
+            errors.append(f"Traffic overview endpoint: {error_msg}")
+            # Store the error for debugging
+            metrics["_traffic_overview_error"] = error_msg
+            # Fallback: try metrics endpoint for traffic if traffic-overview fails
+            # NOTE: This endpoint returns monthly search volume estimates, not daily traffic
+            # This may cause incorrect comparisons with the Ahrefs graph which shows daily traffic
+            try:
+                metrics_params = {
+                    **base_params,
+                    "protocol": "both"
+                }
+                metrics_response = self._get("site-explorer/metrics", metrics_params)
+                metrics["_raw_metrics_response_traffic_fallback"] = metrics_response
+                if isinstance(metrics_response, dict):
+                    metrics_dict = metrics_response.get("metrics")
+                    if isinstance(metrics_dict, dict):
+                        organic_tr = metrics_dict.get("org_traffic")
+                        metrics["organic_traffic"] = _safe_int(organic_tr) if organic_tr is not None else 0
+                        # Add warning that we're using monthly estimates, not daily traffic
+                        metrics["_traffic_is_monthly_estimate"] = True
+                    else:
+                        metrics["organic_traffic"] = 0
+                else:
+                    metrics["organic_traffic"] = 0
+            except Exception as fallback_error:
+                metrics["_traffic_fallback_error"] = str(fallback_error)
+                metrics["organic_traffic"] = 0
         
-        # 3. Referring Domains - using /v3/site-explorer/backlinks-stats
+        # 4. Referring Domains - using /v3/site-explorer/backlinks-stats
         # Ahrefs recommended endpoint for dashboards
         # Extract: metrics.live_refdomains
         try:

@@ -288,11 +288,25 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
             else:
                 st.write("No domain rating response stored")
             
-            st.write("**Metrics Response:**")
-            if overview_data.get("_raw_metrics_response"):
-                st.json(overview_data.get("_raw_metrics_response"))
+            st.write("**Keywords Response:**")
+            if overview_data.get("_raw_keywords_response"):
+                st.json(overview_data.get("_raw_keywords_response"))
             else:
-                st.write("No metrics response stored")
+                st.write("No keywords response stored")
+            
+            st.write("**Traffic Response:**")
+            if overview_data.get("_raw_traffic_response"):
+                st.json(overview_data.get("_raw_traffic_response"))
+            else:
+                st.warning("⚠️ Traffic-overview endpoint not available, using fallback from metrics endpoint")
+                if overview_data.get("_traffic_overview_error"):
+                    st.write(f"**Error:** {overview_data.get('_traffic_overview_error')}")
+                if overview_data.get("_raw_metrics_response_traffic_fallback"):
+                    st.json(overview_data.get("_raw_metrics_response_traffic_fallback"))
+                elif overview_data.get("_raw_metrics_response"):
+                    st.json(overview_data.get("_raw_metrics_response"))
+                if overview_data.get("_traffic_is_monthly_estimate"):
+                    st.error("❌ **WARNING:** Using monthly search volume estimates, not daily traffic! This may cause incorrect comparisons.")
             
             st.write("**Backlinks Stats Response:**")
             if overview_data.get("_raw_backlinks_response"):

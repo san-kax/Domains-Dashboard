@@ -349,33 +349,34 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
             current_date_str = today.strftime('%Y-%m-%d') if changes_period == "Last month" else yesterday.strftime('%Y-%m-%d')
             date_note = "today (for Last month comparison to match Ahrefs)" if changes_period == "Last month" else "yesterday (for data availability)"
             st.write(f"- Current data date: {current_date_str} ({date_note})")
-            st.write(f"- Note: For 'Last month' comparison, we use today's date to match Ahrefs graph (Dec 4 vs Nov 4)")
+            st.write(f"- Note: For 'Last month' comparison with monthly estimates, we use the LAST DAY of the previous month (not same day) to compare full months")
             if changes_period and changes_period != "Don't show":
                 from config import CHANGES_OPTIONS
                 days_back = CHANGES_OPTIONS.get(changes_period)
                 if days_back:
                     if changes_period == "Last month":
-                        # Match stats_service.py logic: use same day of previous month
-                        # For "Last month", use today's date as base (Dec 4) to calculate Nov 4
-                        # This matches Ahrefs graph which shows Dec 4 vs Nov 4
+                        # Match stats_service.py logic: use LAST DAY of previous month for monthly estimates
+                        # Since org_traffic is a monthly estimate, we compare full months (last day of prev month)
+                        # instead of partial months (same day), which gives more accurate comparisons
                         import calendar
                         base_date = today if changes_period == "Last month" else yesterday
                         if base_date.month == 1:
                             prev_month = 12
                             prev_year = base_date.year - 1
-                            last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
-                            prev_day = min(base_date.day, last_day_prev_month)
-                            prev_date = datetime(prev_year, prev_month, prev_day)
                         else:
                             prev_month = base_date.month - 1
                             prev_year = base_date.year
-                            last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
-                            prev_day = min(base_date.day, last_day_prev_month)
-                            prev_date = datetime(prev_year, prev_month, prev_day)
+                        # Use the last day of the previous month to get the full month's estimate
+                        last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
+                        prev_date = datetime(prev_year, prev_month, last_day_prev_month)
                     else:
                         prev_date = yesterday - timedelta(days=days_back)
                     st.write(f"- Comparison date ({changes_period}): {prev_date.strftime('%Y-%m-%d')}")
                     st.write(f"- Days difference: {(yesterday - prev_date).days} days")
+                    
+                    # Show comparison note if available
+                    if overview_data.get("_debug_info", {}).get("_comparison_note"):
+                        st.info(f"ℹ️ {overview_data['_debug_info']['_comparison_note']}")
                     
                     # Show previous period values for debugging
                     if overview_data.get("_debug_info"):

@@ -229,26 +229,28 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                 base_date_for_comparison = today if changes_period == "Last month" else yesterday
                 
                 if changes_period == "Last month":
-                    # For "Last month", Ahrefs compares current date with the same day of the previous month
-                    # Based on Ahrefs graph: Dec 4 vs Nov 4 (same day last month)
-                    # Use today's date as base for comparison calculation
+                    # For "Last month" comparison with monthly estimates (org_traffic):
+                    # Since org_traffic is a monthly estimate, we should compare full months, not partial months.
+                    # Compare to the LAST DAY of the previous month to get the full month's estimate.
+                    # This gives a more accurate comparison: full previous month vs current partial month.
                     import calendar
                     if base_date_for_comparison.month == 1:
                         # If current month is January, previous month is December of last year
                         prev_month = 12
                         prev_year = base_date_for_comparison.year - 1
-                        last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
-                        # Use same day, but ensure it doesn't exceed days in previous month
-                        prev_day = min(base_date_for_comparison.day, last_day_prev_month)
-                        prev_date = datetime(prev_year, prev_month, prev_day)
                     else:
-                        # Use same day of previous month (based on today's date, not yesterday)
                         prev_month = base_date_for_comparison.month - 1
                         prev_year = base_date_for_comparison.year
-                        last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
-                        # Use same day, but ensure it doesn't exceed days in previous month
-                        prev_day = min(base_date_for_comparison.day, last_day_prev_month)
-                        prev_date = datetime(prev_year, prev_month, prev_day)
+                    
+                    # Use the last day of the previous month to get the full month's estimate
+                    last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
+                    prev_date = datetime(prev_year, prev_month, last_day_prev_month)
+                    
+                    # Store note about why we use last day
+                    overview_raw.setdefault("_debug_info", {})["_comparison_note"] = (
+                        f"Using last day of previous month ({prev_date.strftime('%Y-%m-%d')}) "
+                        f"for monthly estimate comparison instead of same day ({base_date_for_comparison.day})"
+                    )
                 elif changes_period in ["Last 3 months", "Last 6 months"]:
                     # For multi-month periods, use approximate days (Ahrefs uses calendar months)
                     prev_date = yesterday - timedelta(days=days_back)

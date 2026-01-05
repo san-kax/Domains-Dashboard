@@ -392,11 +392,20 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                     # Calculate changes: current - previous
                     # This matches Ahrefs UI: if current is less than previous, change is negative (decrease)
                     # Example: current=13.4K, previous=18.9K, change=13.4K-18.9K=-5.5K (negative, correct)
-                    organic_keywords_change = metrics["organic_keywords"] - prev_organic_keywords
-                    organic_traffic_change = metrics["organic_traffic"] - prev_organic_traffic
-                    paid_keywords_change = metrics["paid_keywords"] - prev_paid_keywords
-                    paid_traffic_change = metrics["paid_traffic"] - prev_paid_traffic
-                    ref_domains_change = metrics["ref_domains"] - prev_ref_domains
+                    # 
+                    # CRITICAL: Calculate initial changes BEFORE any post-processing swaps
+                    organic_keywords_change_initial = metrics["organic_keywords"] - prev_organic_keywords
+                    organic_traffic_change_initial = metrics["organic_traffic"] - prev_organic_traffic
+                    paid_keywords_change_initial = metrics["paid_keywords"] - prev_paid_keywords
+                    paid_traffic_change_initial = metrics["paid_traffic"] - prev_paid_traffic
+                    ref_domains_change_initial = metrics["ref_domains"] - prev_ref_domains
+                    
+                    # Use initial values for now (will be updated if swap happens later)
+                    organic_keywords_change = organic_keywords_change_initial
+                    organic_traffic_change = organic_traffic_change_initial
+                    paid_keywords_change = paid_keywords_change_initial
+                    paid_traffic_change = paid_traffic_change_initial
+                    ref_domains_change = ref_domains_change_initial
                     
                     # CRITICAL FIX: If dates are in correct order but values appear swapped based on magnitude,
                     # we need to detect and fix it. The key insight: if we're comparing recent data (yesterday)
@@ -475,6 +484,64 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                         
                         overview_raw["_debug_info"]["date_validation"]["values_swapped"] = True
                         overview_raw["_debug_info"]["date_validation"]["swap_reason"] = swap_reason
+                    
+                    # FINAL SAFETY CHECK: For "Last month", if we have a very large positive change
+                    # (suggesting values might be swapped), check if swap is needed
+                    # This handles edge cases where swap detection didn't trigger but values are still wrong
+                    if changes_period == "Last month" and not values_swapped:
+                        # Check if API dates are the same (defined earlier in the code flow)
+                        api_dates_same_check = current_api_date == prev_api_date
+                        
+                        # Check if change magnitude is suspiciously large and positive
+                        # If current value is relatively low but change is very large and positive,
+                        # it suggests values are swapped (previous was actually higher)
+                        large_positive_traffic_change = organic_traffic_change_initial > 10000 and metrics["organic_traffic"] < 50000
+                        large_positive_keywords_change = organic_keywords_change_initial > 500 and metrics["organic_keywords"] < 15000
+                        
+                        # Additional heuristic: If "current" value is much lower than "previous" but change is positive,
+                        # this is impossible and indicates swap is needed
+                        # Example: current=29K, previous=61K, but change shows +32K (impossible - should be -32K)
+                        traffic_impossible = metrics["organic_traffic"] < prev_organic_traffic and organic_traffic_change_initial > 0
+                        keywords_impossible = metrics["organic_keywords"] < prev_organic_keywords and organic_keywords_change_initial > 0
+                        
+                        # If we have large positive changes but current values are relatively low (suggesting decrease, not increase),
+                        # OR if the change sign is impossible (current < previous but change is positive),
+                        # and API dates are same, swap
+                        if ((large_positive_traffic_change or large_positive_keywords_change or traffic_impossible or keywords_impossible) 
+                            and api_dates_same_check):
+                            values_swapped = True
+                            swap_reason = "Large positive change with low current value suggests swap needed (Last month safety check)"
+                            
+                            # Swap the values
+                            current_organic_keywords = prev_organic_keywords
+                            current_organic_traffic = prev_organic_traffic
+                            current_paid_keywords = prev_paid_keywords
+                            current_paid_traffic = prev_paid_traffic
+                            current_ref_domains = prev_ref_domains
+                            
+                            prev_organic_keywords = metrics["organic_keywords"]
+                            prev_organic_traffic = metrics["organic_traffic"]
+                            prev_paid_keywords = metrics["paid_keywords"]
+                            prev_paid_traffic = metrics["paid_traffic"]
+                            prev_ref_domains = metrics["ref_domains"]
+                            
+                            # Update metrics dict with swapped values
+                            metrics["organic_keywords"] = current_organic_keywords
+                            metrics["organic_traffic"] = current_organic_traffic
+                            metrics["paid_keywords"] = current_paid_keywords
+                            metrics["paid_traffic"] = current_paid_traffic
+                            metrics["ref_domains"] = current_ref_domains
+                            
+                            # Recalculate changes with swapped values
+                            organic_keywords_change = metrics["organic_keywords"] - prev_organic_keywords
+                            organic_traffic_change = metrics["organic_traffic"] - prev_organic_traffic
+                            paid_keywords_change = metrics["paid_keywords"] - prev_paid_keywords
+                            paid_traffic_change = metrics["paid_traffic"] - prev_paid_traffic
+                            ref_domains_change = metrics["ref_domains"] - prev_ref_domains
+                            
+                            overview_raw["_debug_info"]["date_validation"]["values_swapped"] = True
+                            overview_raw["_debug_info"]["date_validation"]["swap_reason"] = swap_reason
+                            overview_raw["_debug_info"]["date_validation"]["safety_swap_applied"] = True
                     
                     # Store raw calculation for debugging
                     overview_raw["_debug_info"]["raw_calculation"] = {

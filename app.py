@@ -278,12 +278,12 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
         client = AhrefsClient(api_key=AHREFS_TOKEN) if AHREFS_TOKEN else AhrefsClient()
         
         # Get raw overview data for debugging
-        # For "Last month" comparison, use today's date to match Ahrefs (Dec 4 vs Nov 4)
-        # For other comparisons, use yesterday's date (data availability)
+        # Always use yesterday's date (most recent available data)
+        # Ahrefs typically shows data up to yesterday, so using today might return stale or unavailable data
         from datetime import datetime, timedelta
         today = datetime.now()
         yesterday = today - timedelta(days=1)
-        current_date = today if changes_period == "Last month" else yesterday
+        current_date = yesterday
         overview_data = client.overview(target=domain, country=country, date=current_date.strftime("%Y-%m-%d"))
         
         # Always show debug info when using real API (for now, to diagnose)
@@ -382,12 +382,11 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
                 st.json(overview_data.get("_api_params_backlinks"))
             
             st.write("**Date Information:**")
-            # For "Last month" comparison, we use today's date to match Ahrefs (Dec 4 vs Nov 4)
-            # For other comparisons, we use yesterday for data availability
-            current_date_str = today.strftime('%Y-%m-%d') if changes_period == "Last month" else yesterday.strftime('%Y-%m-%d')
-            date_note = "today (for Last month comparison to match Ahrefs)" if changes_period == "Last month" else "yesterday (for data availability)"
-            st.write(f"- Current data date: {current_date_str} ({date_note})")
-            st.write(f"- Note: For 'Last month' comparison, we compare same day of previous month (e.g., Dec 5 vs Nov 5)")
+            # Always use yesterday for current data (most recent available)
+            # For "Last month" comparison, we compare yesterday with the same day last month
+            current_date_str = yesterday.strftime('%Y-%m-%d')
+            st.write(f"- Current data date: {current_date_str} (yesterday - most recent available data)")
+            st.write(f"- Note: For 'Last month' comparison, we compare yesterday with the same day of previous month (e.g., Dec 4 vs Nov 4)")
             st.warning("⚠️ **IMPORTANT:** The API's `org_traffic` is a monthly search volume ESTIMATE, not daily actual traffic. "
                       "The Ahrefs graph shows daily actual traffic, which is a different metric. "
                       "This is why the comparison may not match the graph exactly.")
@@ -397,9 +396,9 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
                 if days_back:
                     if changes_period == "Last month":
                         # Match stats_service.py logic: use same day of previous month
-                        # This matches how Ahrefs UI typically handles "Last month" comparisons
+                        # Always use yesterday as base date for consistency
                         import calendar
-                        base_date = today if changes_period == "Last month" else yesterday
+                        base_date = yesterday
                         if base_date.month == 1:
                             prev_month = 12
                             prev_year = base_date.year - 1

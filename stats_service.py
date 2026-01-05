@@ -169,16 +169,14 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
     from datetime import datetime, timedelta
 
     # Reuse overview_data if provided, otherwise fetch it
-    # For "Last month" comparison, use today's date to match Ahrefs (Dec 4 vs Nov 4)
-    # For other comparisons, use yesterday's date (data availability)
+    # Always use yesterday's date for current data (most recent available data)
+    # Ahrefs typically shows data up to yesterday, so using today might return stale or unavailable data
     from datetime import datetime, timedelta
     today = datetime.now()
     yesterday = today - timedelta(days=1)
     
-    # Determine which date to use for current data
-    # If comparing "Last month", use today to match Ahrefs graph (Dec 4 vs Nov 4)
-    # Otherwise, use yesterday for data availability
-    current_date = today if changes_period == "Last month" else yesterday
+    # Always use yesterday for current data to ensure data availability
+    current_date = yesterday
     
     if overview_data is not None:
         overview_raw = overview_data
@@ -218,15 +216,14 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
             
             if days_back is not None:
                 # Calculate previous period date
-                # For "Last month" comparison, Ahrefs uses TODAY's date as base (not yesterday)
-                # This matches the Ahrefs graph which shows Dec 4 vs Nov 4
-                # But we fetch current data for yesterday (Dec 3) to match Ahrefs data availability
+                # Use the same base date (yesterday) for both current and previous period calculations
+                # This ensures we're comparing the most recent available data with the same day last month
                 today = datetime.now()
                 yesterday = today - timedelta(days=1)
                 
-                # For "Last month", use today's date to calculate comparison date
-                # This ensures we compare Dec 4 with Nov 4 (not Dec 3 with Nov 3)
-                base_date_for_comparison = today if changes_period == "Last month" else yesterday
+                # Always use yesterday as base for comparison date calculation
+                # This ensures we compare yesterday (most recent available) with same day last month
+                base_date_for_comparison = yesterday
                 
                 if changes_period == "Last month":
                     # For "Last month" comparison:
@@ -317,6 +314,19 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                 
                 # Only calculate changes if we got valid previous metrics
                 if prev_metrics and isinstance(prev_metrics, dict):
+                    # Validate that current date is after previous date (safeguard against date mix-ups)
+                    current_api_date = overview_raw.get("_api_returned_date") or current_date.strftime("%Y-%m-%d")
+                    prev_api_date = prev_overview.get("_api_returned_date") or prev_date_str
+                    
+                    # Store date validation in debug info
+                    if "_debug_info" not in overview_raw:
+                        overview_raw["_debug_info"] = {}
+                    overview_raw["_debug_info"]["date_validation"] = {
+                        "current_date": current_api_date,
+                        "previous_date": prev_api_date,
+                        "current_after_previous": current_api_date >= prev_api_date
+                    }
+                    
                     # Store previous values for tooltip display
                     prev_organic_keywords = prev_metrics.get("organic_keywords", 0)
                     prev_organic_traffic = prev_metrics.get("organic_traffic", 0)
@@ -324,7 +334,9 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                     prev_paid_traffic = prev_metrics.get("paid_traffic", 0)
                     prev_ref_domains = prev_metrics.get("ref_domains", 0)
                     
-                    # Calculate changes (even if previous values are 0, that's still valid historical data)
+                    # Calculate changes: current - previous
+                    # This matches Ahrefs UI: if current is less than previous, change is negative (decrease)
+                    # Example: current=13.4K, previous=18.9K, change=13.4K-18.9K=-5.5K (negative, correct)
                     organic_keywords_change = metrics["organic_keywords"] - prev_organic_keywords
                     organic_traffic_change = metrics["organic_traffic"] - prev_organic_traffic
                     paid_keywords_change = metrics["paid_keywords"] - prev_paid_keywords

@@ -226,38 +226,22 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                 base_date_for_comparison = yesterday
                 
                 if changes_period == "Last month":
-                    # For "Last month" comparison:
+                    # CRITICAL FIX: Ahrefs calculates "Last month" changes as exactly 30 days ago, NOT same day last month!
+                    # According to Ahrefs support:
+                    # - Organic Keywords delta: change over the last 30 days
+                    # - Organic Traffic delta: change in estimated monthly traffic over the last 30 days
+                    # - Ref. Domains delta: change over the last 30 days
+                    #
                     # IMPORTANT: The API's org_traffic is a monthly search volume ESTIMATE, not daily actual traffic.
                     # The Ahrefs graph shows daily actual traffic, which is a different metric.
-                    # 
-                    # We compare to the same day of the previous month (e.g., Dec 5 vs Nov 5) to match
-                    # how Ahrefs UI typically handles "Last month" comparisons, even though these are
-                    # monthly estimates, not daily values.
                     #
-                    # Note: This comparison may not match the graph exactly because:
-                    # - Graph shows: Daily actual traffic (sum of daily visits)
-                    # - API shows: Monthly search volume estimates (search volume × ranking positions)
-                    import calendar
-                    if base_date_for_comparison.month == 1:
-                        # If current month is January, previous month is December of last year
-                        prev_month = 12
-                        prev_year = base_date_for_comparison.year - 1
-                        last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
-                        # Use same day, but ensure it doesn't exceed days in previous month
-                        prev_day = min(base_date_for_comparison.day, last_day_prev_month)
-                        prev_date = datetime(prev_year, prev_month, prev_day)
-                    else:
-                        # Use same day of previous month (matches Ahrefs UI behavior)
-                        prev_month = base_date_for_comparison.month - 1
-                        prev_year = base_date_for_comparison.year
-                        last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
-                        # Use same day, but ensure it doesn't exceed days in previous month
-                        prev_day = min(base_date_for_comparison.day, last_day_prev_month)
-                        prev_date = datetime(prev_year, prev_month, prev_day)
+                    # Use exactly 30 days ago (not same day last month) to match Ahrefs calculation
+                    prev_date = base_date_for_comparison - timedelta(days=30)
                     
                     # Store note about the metric difference
                     overview_raw.setdefault("_debug_info", {})["_comparison_note"] = (
-                        f"Comparing monthly estimates: {base_date_for_comparison.strftime('%Y-%m-%d')} vs {prev_date.strftime('%Y-%m-%d')}. "
+                        f"Comparing exactly 30 days: {base_date_for_comparison.strftime('%Y-%m-%d')} vs {prev_date.strftime('%Y-%m-%d')} (30 days ago). "
+                        f"This matches Ahrefs 'Last month' calculation which uses exactly 30 days, not same day last month. "
                         f"Note: org_traffic is a monthly estimate, not daily actual traffic like the graph shows."
                     )
                 elif changes_period in ["Last 3 months", "Last 6 months"]:

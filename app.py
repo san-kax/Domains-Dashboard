@@ -383,10 +383,10 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
             
             st.write("**Date Information:**")
             # Always use yesterday for current data (most recent available)
-            # For "Last month" comparison, we compare yesterday with the same day last month
+            # For "Last month" comparison, Ahrefs uses exactly 30 days ago (not same day last month)
             current_date_str = yesterday.strftime('%Y-%m-%d')
             st.write(f"- Current data date: {current_date_str} (yesterday - most recent available data)")
-            st.write(f"- Note: For 'Last month' comparison, we compare yesterday with the same day of previous month (e.g., Dec 4 vs Nov 4)")
+            st.write(f"- Note: For 'Last month' comparison, Ahrefs compares exactly 30 days ago (e.g., Jan 4 vs Dec 5, not Jan 4 vs Dec 4)")
             st.warning("⚠️ **IMPORTANT:** The API's `org_traffic` is a monthly search volume ESTIMATE, not daily actual traffic. "
                       "The Ahrefs graph shows daily actual traffic, which is a different metric. "
                       "This is why the comparison may not match the graph exactly.")
@@ -395,22 +395,10 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
                 days_back = CHANGES_OPTIONS.get(changes_period)
                 if days_back:
                     if changes_period == "Last month":
-                        # Match stats_service.py logic: use same day of previous month
-                        # Always use yesterday as base date for consistency
-                        import calendar
+                        # CRITICAL: Ahrefs uses exactly 30 days ago, NOT same day last month!
+                        # Match stats_service.py logic: use exactly 30 days ago
                         base_date = yesterday
-                        if base_date.month == 1:
-                            prev_month = 12
-                            prev_year = base_date.year - 1
-                            last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
-                            prev_day = min(base_date.day, last_day_prev_month)
-                            prev_date = datetime(prev_year, prev_month, prev_day)
-                        else:
-                            prev_month = base_date.month - 1
-                            prev_year = base_date.year
-                            last_day_prev_month = calendar.monthrange(prev_year, prev_month)[1]
-                            prev_day = min(base_date.day, last_day_prev_month)
-                            prev_date = datetime(prev_year, prev_month, prev_day)
+                        prev_date = base_date - timedelta(days=30)
                     else:
                         prev_date = yesterday - timedelta(days=days_back)
                     st.write(f"- Comparison date ({changes_period}): {prev_date.strftime('%Y-%m-%d')}")

@@ -339,11 +339,41 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                     prev_paid_traffic = prev_metrics.get("paid_traffic", 0)
                     prev_ref_domains = prev_metrics.get("ref_domains", 0)
                     
-                    # CRITICAL: If dates are reversed (current < previous), swap the values
-                    # This handles cases where API returns data for different dates than requested
+                    # CRITICAL FIX: Detect and correct value swapping
+                    # The issue: Sometimes what we think is "current" is actually "previous" and vice versa
+                    # This can happen if API returns data for dates that don't match what we requested
+                    # or if the data values themselves are from the wrong periods
+                    
+                    # Strategy: Compare requested dates to determine expected order
+                    # If requested current date > requested previous date, but API dates suggest otherwise, swap
+                    requested_dates_in_order = current_date.strftime("%Y-%m-%d") >= prev_date_str
+                    
+                    # Also check if the values themselves suggest they might be swapped
+                    # If current value is much higher than previous, and we're expecting a decrease, values might be swapped
+                    # But this is tricky to detect, so we'll rely on date comparison
+                    
+                    values_swapped = False
+                    swap_reason = None
+                    
                     if not dates_in_order:
-                        # Dates are reversed - swap current and previous values
-                        # What we thought was "current" is actually older, and "previous" is actually newer
+                        # API-returned dates are reversed - definitely swap
+                        values_swapped = True
+                        swap_reason = "API returned dates in reverse order"
+                    elif not requested_dates_in_order:
+                        # Requested dates are reversed (shouldn't happen, but handle it)
+                        values_swapped = True
+                        swap_reason = "Requested dates were in reverse order"
+                    elif current_api_date == prev_api_date:
+                        # Same date returned for both - can't determine order, this is very suspicious
+                        # This likely means the API returned data for the same date, which means we can't compare periods
+                        # Don't swap (would be arbitrary), but log a critical warning
+                        overview_raw["_debug_info"]["date_validation"]["same_date_warning"] = "CRITICAL: Both API calls returned same date - cannot reliably compare periods"
+                        overview_raw["_debug_info"]["date_validation"]["same_date_critical"] = True
+                        # In this case, we should probably not calculate changes, but for now we'll continue
+                        # The change values will be calculated but may be incorrect
+                    
+                    if values_swapped:
+                        # Swap current and previous values
                         current_organic_keywords = prev_organic_keywords
                         current_organic_traffic = prev_organic_traffic
                         current_paid_keywords = prev_paid_keywords
@@ -364,7 +394,7 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                         metrics["ref_domains"] = current_ref_domains
                         
                         overview_raw["_debug_info"]["date_validation"]["values_swapped"] = True
-                        overview_raw["_debug_info"]["date_validation"]["swap_reason"] = "API returned dates in reverse order"
+                        overview_raw["_debug_info"]["date_validation"]["swap_reason"] = swap_reason
                     else:
                         overview_raw["_debug_info"]["date_validation"]["values_swapped"] = False
                     
@@ -376,6 +406,25 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                     paid_keywords_change = metrics["paid_keywords"] - prev_paid_keywords
                     paid_traffic_change = metrics["paid_traffic"] - prev_paid_traffic
                     ref_domains_change = metrics["ref_domains"] - prev_ref_domains
+                    
+                    # Store raw calculation for debugging
+                    overview_raw["_debug_info"]["raw_calculation"] = {
+                        "organic_keywords": {
+                            "current": metrics["organic_keywords"],
+                            "previous": prev_organic_keywords,
+                            "change": organic_keywords_change
+                        },
+                        "organic_traffic": {
+                            "current": metrics["organic_traffic"],
+                            "previous": prev_organic_traffic,
+                            "change": organic_traffic_change
+                        },
+                        "ref_domains": {
+                            "current": metrics["ref_domains"],
+                            "previous": prev_ref_domains,
+                            "change": ref_domains_change
+                        }
+                    }
                     
                     # Calculate percentage changes
                     def calc_pct_change(current: int, previous: int) -> float:

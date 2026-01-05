@@ -318,13 +318,18 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                     current_api_date = overview_raw.get("_api_returned_date") or current_date.strftime("%Y-%m-%d")
                     prev_api_date = prev_overview.get("_api_returned_date") or prev_date_str
                     
+                    # Check if dates are in correct order
+                    dates_in_order = current_api_date >= prev_api_date
+                    
                     # Store date validation in debug info
                     if "_debug_info" not in overview_raw:
                         overview_raw["_debug_info"] = {}
                     overview_raw["_debug_info"]["date_validation"] = {
                         "current_date": current_api_date,
                         "previous_date": prev_api_date,
-                        "current_after_previous": current_api_date >= prev_api_date
+                        "current_after_previous": dates_in_order,
+                        "current_requested": current_date.strftime("%Y-%m-%d"),
+                        "previous_requested": prev_date_str
                     }
                     
                     # Store previous values for tooltip display
@@ -333,6 +338,35 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                     prev_paid_keywords = prev_metrics.get("paid_keywords", 0)
                     prev_paid_traffic = prev_metrics.get("paid_traffic", 0)
                     prev_ref_domains = prev_metrics.get("ref_domains", 0)
+                    
+                    # CRITICAL: If dates are reversed (current < previous), swap the values
+                    # This handles cases where API returns data for different dates than requested
+                    if not dates_in_order:
+                        # Dates are reversed - swap current and previous values
+                        # What we thought was "current" is actually older, and "previous" is actually newer
+                        current_organic_keywords = prev_organic_keywords
+                        current_organic_traffic = prev_organic_traffic
+                        current_paid_keywords = prev_paid_keywords
+                        current_paid_traffic = prev_paid_traffic
+                        current_ref_domains = prev_ref_domains
+                        
+                        prev_organic_keywords = metrics["organic_keywords"]
+                        prev_organic_traffic = metrics["organic_traffic"]
+                        prev_paid_keywords = metrics["paid_keywords"]
+                        prev_paid_traffic = metrics["paid_traffic"]
+                        prev_ref_domains = metrics["ref_domains"]
+                        
+                        # Update metrics dict with swapped values
+                        metrics["organic_keywords"] = current_organic_keywords
+                        metrics["organic_traffic"] = current_organic_traffic
+                        metrics["paid_keywords"] = current_paid_keywords
+                        metrics["paid_traffic"] = current_paid_traffic
+                        metrics["ref_domains"] = current_ref_domains
+                        
+                        overview_raw["_debug_info"]["date_validation"]["values_swapped"] = True
+                        overview_raw["_debug_info"]["date_validation"]["swap_reason"] = "API returned dates in reverse order"
+                    else:
+                        overview_raw["_debug_info"]["date_validation"]["values_swapped"] = False
                     
                     # Calculate changes: current - previous
                     # This matches Ahrefs UI: if current is less than previous, change is negative (decrease)

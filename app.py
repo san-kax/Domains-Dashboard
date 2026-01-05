@@ -444,18 +444,33 @@ def fetch_stats(domain: str, country: str, period: str, changes_period: str = "L
                         if debug_info.get("prev_metrics"):
                             prev_metrics = debug_info["prev_metrics"]
                             current_metrics = debug_info.get("current_metrics", {})
+                            
+                            # Show date validation info if available
+                            if debug_info.get("date_validation"):
+                                date_val = debug_info["date_validation"]
+                                st.write("**Date Validation:**")
+                                st.write(f"- Current API date: {date_val.get('current_date', 'N/A')}")
+                                st.write(f"- Previous API date: {date_val.get('previous_date', 'N/A')}")
+                                st.write(f"- Dates in order (current >= previous): {date_val.get('current_after_previous', 'N/A')}")
+                                if date_val.get("values_swapped"):
+                                    st.warning(f"⚠️ **Values were swapped** because dates were reversed. Reason: {date_val.get('swap_reason', 'Unknown')}")
+                                st.write("")
+                            
                             st.write("**Extracted Values:**")
                             st.write(f"- **Current** Organic Keywords: {current_metrics.get('organic_keywords', 'N/A')}")
                             st.write(f"- **Previous** Organic Keywords: {prev_metrics.get('organic_keywords', 'N/A')}")
-                            st.write(f"- **Calculated Change**: {current_metrics.get('organic_keywords', 0) - prev_metrics.get('organic_keywords', 0)}")
+                            calc_change_kw = current_metrics.get('organic_keywords', 0) - prev_metrics.get('organic_keywords', 0)
+                            st.write(f"- **Calculated Change**: {calc_change_kw:+,} (should match dashboard)")
                             st.write("")
                             st.write(f"- **Current** Organic Traffic: {current_metrics.get('organic_traffic', 'N/A')}")
                             st.write(f"- **Previous** Organic Traffic: {prev_metrics.get('organic_traffic', 'N/A')}")
-                            st.write(f"- **Calculated Change**: {current_metrics.get('organic_traffic', 0) - prev_metrics.get('organic_traffic', 0)}")
+                            calc_change_traffic = current_metrics.get('organic_traffic', 0) - prev_metrics.get('organic_traffic', 0)
+                            st.write(f"- **Calculated Change**: {calc_change_traffic:+,} (should match dashboard - compare with Ahrefs)")
                             st.write("")
                             st.write(f"- **Current** Ref Domains: {current_metrics.get('ref_domains', 'N/A')}")
                             st.write(f"- **Previous** Ref Domains: {prev_metrics.get('ref_domains', 'N/A')}")
-                            st.write(f"- **Calculated Change**: {current_metrics.get('ref_domains', 0) - prev_metrics.get('ref_domains', 0)}")
+                            calc_change_ref = current_metrics.get('ref_domains', 0) - prev_metrics.get('ref_domains', 0)
+                            st.write(f"- **Calculated Change**: {calc_change_ref:+,} (should match dashboard)")
                     
                     st.write(f"- **To match Ahrefs exactly, verify these dates match what Ahrefs shows in the web interface**")
             

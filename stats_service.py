@@ -264,18 +264,84 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                 overview_raw["_debug_info"]["prev_period_fetch_attempted"] = True
                 overview_raw["_debug_info"]["prev_period_fetch_date"] = prev_date_str
                 
-                # Fetch previous period data
+                # CRITICAL: Use History endpoints to get exact trend data (as per Ahrefs support)
+                # History endpoints provide the exact trend data that matches Ahrefs dashboard
+                # Initialize variables for history endpoints
+                date_from = prev_date_str
+                date_to = yesterday.strftime("%Y-%m-%d")
+                prev_overview = None  # Will be set if we fallback to overview endpoint
+                
                 try:
-                    prev_overview = client.overview(target=domain, country=country, date=prev_date_str)
-                    prev_metrics = _extract_metrics_from_overview(prev_overview)
-                    overview_raw["_debug_info"]["prev_period_fetch_success"] = True
+                    # Calculate date range for history (30 days for "Last month")
+                    date_from = prev_date.strftime("%Y-%m-%d")
+                    date_to = yesterday.strftime("%Y-%m-%d")
+                    
+                    # Fetch history data using the dedicated History endpoints
+                    # These provide the exact trend data that matches Ahrefs dashboard
+                    keywords_history = client.keywords_history(target=domain, date_from=date_from, date_to=date_to)
+                    metrics_history = client.metrics_history(target=domain, date_from=date_from, date_to=date_to)
+                    refdomains_history = client.referring_domains_history(target=domain, date_from=date_from, date_to=date_to)
+                    
+                    # Store history responses for debugging
+                    overview_raw["_debug_info"]["keywords_history"] = keywords_history
+                    overview_raw["_debug_info"]["metrics_history"] = metrics_history
+                    overview_raw["_debug_info"]["refdomains_history"] = refdomains_history
+                    
+                    # Extract values from history endpoints
+                    # History endpoints return data points over time - we need first (oldest) and last (newest) values
+                    prev_metrics = {}
+                    
+                    # Extract from keywords history
+                    if isinstance(keywords_history, dict) and "data" in keywords_history:
+                        history_data = keywords_history["data"]
+                        if isinstance(history_data, list) and len(history_data) > 0:
+                            # First entry is oldest (30 days ago), last entry is newest (yesterday)
+                            first_entry = history_data[0]
+                            last_entry = history_data[-1]
+                            if isinstance(first_entry, dict):
+                                prev_metrics["organic_keywords"] = _safe_int(first_entry.get("keywords") or first_entry.get("org_keywords") or first_entry.get("value"))
+                    
+                    # Extract from metrics history (for traffic)
+                    if isinstance(metrics_history, dict) and "data" in metrics_history:
+                        history_data = metrics_history["data"]
+                        if isinstance(history_data, list) and len(history_data) > 0:
+                            first_entry = history_data[0]
+                            last_entry = history_data[-1]
+                            if isinstance(first_entry, dict):
+                                prev_metrics["organic_traffic"] = _safe_int(first_entry.get("traffic") or first_entry.get("org_traffic") or first_entry.get("value"))
+                    
+                    # Extract from referring domains history
+                    if isinstance(refdomains_history, dict) and "data" in refdomains_history:
+                        history_data = refdomains_history["data"]
+                        if isinstance(history_data, list) and len(history_data) > 0:
+                            first_entry = history_data[0]
+                            last_entry = history_data[-1]
+                            if isinstance(first_entry, dict):
+                                prev_metrics["ref_domains"] = _safe_int(first_entry.get("refdomains") or first_entry.get("referring_domains") or first_entry.get("value"))
+                    
+                    # If history endpoints didn't return data, fallback to overview endpoint
+                    if not prev_metrics or all(v == 0 for v in prev_metrics.values()):
+                        overview_raw["_debug_info"]["history_fallback"] = "History endpoints returned no data, using overview endpoint"
+                        prev_overview = client.overview(target=domain, country=country, date=prev_date_str)
+                        prev_metrics = _extract_metrics_from_overview(prev_overview)
+                    else:
+                        overview_raw["_debug_info"]["history_endpoints_used"] = True
+                        overview_raw["_debug_info"]["prev_period_fetch_success"] = True
+                        
                 except Exception as fetch_error:
-                    # Store the fetch error separately from the outer exception handler
-                    overview_raw["_debug_info"]["prev_period_fetch_error"] = str(fetch_error)
-                    overview_raw["_debug_info"]["prev_period_fetch_error_type"] = type(fetch_error).__name__
-                    overview_raw["_debug_info"]["prev_period_fetch_success"] = False
-                    # Re-raise to be caught by outer exception handler
-                    raise
+                    # If history endpoints fail, fallback to overview endpoint
+                    overview_raw["_debug_info"]["history_endpoint_error"] = str(fetch_error)
+                    overview_raw["_debug_info"]["history_endpoint_error_type"] = type(fetch_error).__name__
+                    try:
+                        prev_overview = client.overview(target=domain, country=country, date=prev_date_str)
+                        prev_metrics = _extract_metrics_from_overview(prev_overview)
+                        overview_raw["_debug_info"]["prev_period_fetch_success"] = True
+                        overview_raw["_debug_info"]["history_fallback"] = f"History endpoints failed ({str(fetch_error)}), using overview endpoint"
+                    except Exception as overview_error:
+                        overview_raw["_debug_info"]["prev_period_fetch_error"] = str(overview_error)
+                        overview_raw["_debug_info"]["prev_period_fetch_error_type"] = type(overview_error).__name__
+                        overview_raw["_debug_info"]["prev_period_fetch_success"] = False
+                        raise
                 
                 # Store debug info about comparison
                 if "_debug_info" not in overview_raw:
@@ -283,11 +349,17 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                 overview_raw["_debug_info"]["comparison_date"] = prev_date_str
                 overview_raw["_debug_info"]["comparison_period"] = changes_period
                 overview_raw["_debug_info"]["prev_metrics"] = prev_metrics
-                # Store raw previous overview for debugging
-                overview_raw["_debug_info"]["prev_overview_raw"] = prev_overview
-                # Check what date the API actually returned for previous period
-                prev_returned_date = prev_overview.get("_api_returned_date") or prev_overview.get("_api_params_metrics", {}).get("date")
-                overview_raw["_debug_info"]["prev_api_returned_date"] = prev_returned_date
+                
+                # Store raw previous overview for debugging (if we used overview endpoint)
+                if "prev_overview" in locals():
+                    overview_raw["_debug_info"]["prev_overview_raw"] = prev_overview
+                    # Check what date the API actually returned for previous period
+                    prev_returned_date = prev_overview.get("_api_returned_date") or prev_overview.get("_api_params_metrics", {}).get("date")
+                    overview_raw["_debug_info"]["prev_api_returned_date"] = prev_returned_date
+                else:
+                    # Using history endpoints - use the date_from as the previous date
+                    overview_raw["_debug_info"]["prev_api_returned_date"] = date_from
+                    overview_raw["_debug_info"]["data_source"] = "history_endpoints"
                 # Store current date used for comparison
                 overview_raw["_debug_info"]["current_date"] = current_date.strftime("%Y-%m-%d")
                 overview_raw["_debug_info"]["current_metrics"] = metrics
@@ -300,7 +372,11 @@ def get_domain_stats(domain: str, country: str, period: str, client: AhrefsClien
                 if prev_metrics and isinstance(prev_metrics, dict):
                     # Validate that current date is after previous date (safeguard against date mix-ups)
                     current_api_date = overview_raw.get("_api_returned_date") or current_date.strftime("%Y-%m-%d")
-                    prev_api_date = prev_overview.get("_api_returned_date") or prev_date_str
+                    # Get previous date from overview if available, otherwise use date_from from history
+                    if "prev_overview" in locals() and isinstance(prev_overview, dict):
+                        prev_api_date = prev_overview.get("_api_returned_date") or prev_overview.get("_api_params_metrics", {}).get("date") or prev_date_str
+                    else:
+                        prev_api_date = date_from if "date_from" in locals() else prev_date_str
                     
                     # Parse dates to ensure proper comparison (handle string comparison issues)
                     try:

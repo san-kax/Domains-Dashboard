@@ -333,3 +333,132 @@ class AhrefsClient:
             metrics["_errors"] = errors
         
         return metrics
+
+    def keywords_history(self, target: str, date_from: Optional[str] = None, date_to: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Fetch organic keywords history using the Keywords History endpoint.
+        This provides the exact trend data that matches Ahrefs dashboard.
+        
+        Args:
+            target: Domain or URL to analyze
+            date_from: Start date in YYYY-MM-DD format (default: 30 days ago)
+            date_to: End date in YYYY-MM-DD format (default: yesterday)
+        """
+        from datetime import datetime, timedelta
+        
+        target = target.rstrip('/')
+        
+        # Determine mode
+        if "/" in target and target.count("/") >= 1:
+            mode = "prefix"
+        else:
+            mode = "subdomains"
+        
+        # Default dates: last 30 days
+        if not date_to:
+            today = datetime.now()
+            date_to = (today - timedelta(days=1)).strftime("%Y-%m-%d")
+        
+        if not date_from:
+            date_to_obj = datetime.strptime(date_to, "%Y-%m-%d")
+            date_from = (date_to_obj - timedelta(days=30)).strftime("%Y-%m-%d")
+        
+        params = {
+            "target": target,
+            "mode": mode,
+            "date_from": date_from,
+            "date_to": date_to,
+            "protocol": "both"
+        }
+        
+        try:
+            response = self._get("site-explorer/organic/keywords-history", params)
+            return response
+        except Exception as e:
+            return {"error": str(e), "data": []}
+
+    def metrics_history(self, target: str, date_from: Optional[str] = None, date_to: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Fetch organic traffic history using the Metrics History endpoint.
+        This provides the exact trend data that matches Ahrefs dashboard.
+        
+        Args:
+            target: Domain or URL to analyze
+            date_from: Start date in YYYY-MM-DD format (default: 30 days ago)
+            date_to: End date in YYYY-MM-DD format (default: yesterday)
+        """
+        from datetime import datetime, timedelta
+        
+        target = target.rstrip('/')
+        
+        # Determine mode
+        if "/" in target and target.count("/") >= 1:
+            mode = "prefix"
+        else:
+            mode = "subdomains"
+        
+        # Default dates: last 30 days
+        if not date_to:
+            today = datetime.now()
+            date_to = (today - timedelta(days=1)).strftime("%Y-%m-%d")
+        
+        if not date_from:
+            date_to_obj = datetime.strptime(date_to, "%Y-%m-%d")
+            date_from = (date_to_obj - timedelta(days=30)).strftime("%Y-%m-%d")
+        
+        params = {
+            "target": target,
+            "mode": mode,
+            "date_from": date_from,
+            "date_to": date_to,
+            "protocol": "both"
+        }
+        
+        try:
+            response = self._get("site-explorer/metrics-history", params)
+            return response
+        except Exception as e:
+            return {"error": str(e), "data": []}
+
+    def referring_domains_history(self, target: str, date_from: Optional[str] = None, date_to: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Fetch referring domains history using the Referring Domains History endpoint.
+        This provides the exact trend data that matches Ahrefs dashboard.
+        
+        Args:
+            target: Domain or URL to analyze
+            date_from: Start date in YYYY-MM-DD format (default: 30 days ago)
+            date_to: End date in YYYY-MM-DD format (default: yesterday)
+        """
+        from datetime import datetime, timedelta
+        
+        target = target.rstrip('/')
+        
+        # Determine mode
+        if "/" in target and target.count("/") >= 1:
+            mode = "prefix"
+        else:
+            mode = "subdomains"
+        
+        # Default dates: last 30 days
+        if not date_to:
+            today = datetime.now()
+            date_to = (today - timedelta(days=1)).strftime("%Y-%m-%d")
+        
+        if not date_from:
+            date_to_obj = datetime.strptime(date_to, "%Y-%m-%d")
+            date_from = (date_to_obj - timedelta(days=30)).strftime("%Y-%m-%d")
+        
+        params = {
+            "target": target,
+            "mode": mode,
+            "date_from": date_from,
+            "date_to": date_to,
+            "protocol": "both"
+        }
+        
+        try:
+            response = self._get("backlinks/refdomains/refdomains-history", params)
+            return response
+        except Exception as e:
+            return {"error": str(e), "data": []}
